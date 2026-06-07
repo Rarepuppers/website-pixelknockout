@@ -1,0 +1,32 @@
+# --- Secrets / local env (NEVER commit) ---
+env.local
+.env
+.env.*
+*.local
+secrets.*
+
+# --- OAuth / service-account credential files ---
+googlecloud_oauth_client_secret.json
+client_secret*.json
+*oauth*secret*.json
+*credentials*.json
+*service-account*.json
+
+# --- OS / editor cruft ---
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+.idea/
+.vscode/
+
+# --- Node (if you add tooling later) ---
+node_modules/
+dist/
+.cache/
+
+.claude/settings.local.json
+
+# Wrangler local cache/state (Cloudflare Worker tooling)
+.wrangler/
+

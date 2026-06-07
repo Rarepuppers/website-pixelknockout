@@ -1,0 +1,225 @@
+/* ===== PKO — Pixel Knockout : retro arcade theme ===== */
+:root {
+  --bg: #0d0b1f;
+  --bg2: #141033;
+  --panel: #1d1745;
+  --panel2: #261e5c;
+  --ink: #f5f3ff;
+  --muted: #9a93c9;
+  --gold: #ffd34d;
+  --red: #ff4d6d;
+  --blue: #4dc3ff;
+  --green: #4dffa3;
+  --border: #4b3f8f;
+  --shadow: #07061a;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 20% 0%, #221a52 0, transparent 45%),
+    radial-gradient(circle at 90% 10%, #2a1240 0, transparent 40%),
+    var(--bg);
+  color: var(--ink);
+  font-family: 'VT323', monospace;
+  font-size: 20px;
+  line-height: 1.4;
+}
+
+h1, h2, h3, .pixel { font-family: 'Press Start 2P', monospace; line-height: 1.5; }
+h1 { font-size: 22px; margin: 8px 0 6px; }
+h2 { font-size: 16px; }
+h3 { font-size: 12px; }
+
+.muted { color: var(--muted); }
+.small { font-size: 16px; }
+.hidden { display: none !important; }
+.kicker { font-family: 'Press Start 2P'; font-size: 9px; letter-spacing: 1px; color: var(--gold); margin: 0; }
+
+a { color: var(--blue); text-decoration: none; }
+
+/* ===== Top bar ===== */
+.topbar {
+  display: flex; align-items: center; gap: 24px;
+  padding: 14px 22px;
+  background: linear-gradient(180deg, var(--bg2), transparent);
+  border-bottom: 3px solid var(--border);
+  flex-wrap: wrap;
+}
+.brand { display: flex; flex-direction: column; }
+.brand-logo {
+  font-family: 'Press Start 2P'; font-size: 26px; color: var(--gold);
+  text-shadow: 3px 3px 0 var(--red), 6px 6px 0 var(--shadow);
+}
+.brand-sub { font-family: 'Press Start 2P'; font-size: 8px; color: var(--muted); letter-spacing: 3px; margin-top: 4px; }
+
+.nav { display: flex; gap: 6px; margin-left: 8px; flex: 1; flex-wrap: wrap; }
+.nav-link {
+  font-family: 'Press Start 2P'; font-size: 9px; color: var(--ink);
+  padding: 10px 12px; border: 2px solid transparent; border-radius: 4px;
+}
+.nav-link:hover { background: var(--panel); }
+.nav-link.active { background: var(--panel2); border-color: var(--gold); color: var(--gold); }
+
+.account { display: flex; align-items: center; gap: 10px; }
+.acct-pts { font-family: 'Press Start 2P'; font-size: 10px; color: var(--gold); }
+.acct-name { color: var(--ink); }
+
+/* ===== Views ===== */
+.view { max-width: 920px; margin: 0 auto; padding: 26px 18px 60px; }
+
+.event-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+.bank {
+  background: var(--panel); border: 3px solid var(--border); border-radius: 8px;
+  padding: 12px 18px; text-align: center; box-shadow: 0 4px 0 var(--shadow); min-width: 180px;
+}
+.bank-label { display: block; font-family: 'Press Start 2P'; font-size: 7px; color: var(--muted); }
+.bank-value { display: block; font-family: 'Press Start 2P'; font-size: 24px; color: var(--gold); margin: 6px 0; }
+.bank-note { display: block; font-size: 15px; color: var(--green); min-height: 18px; }
+
+/* ===== Lock countdown ===== */
+.lock-timer { font-family: 'Press Start 2P'; font-size: 9px; color: var(--blue); margin-top: 8px; }
+.lock-timer.soon { color: var(--gold); }
+.lock-timer.closed { color: var(--red); }
+
+/* ===== Facts (fighter profile) ===== */
+.facts { margin: 8px 0 18px; padding-left: 22px; }
+.facts li { margin: 6px 0; }
+.facts.fun li { color: var(--gold); }
+
+/* ===== Bouts ===== */
+.bouts { display: flex; flex-direction: column; gap: 16px; margin-top: 22px; }
+.bout {
+  background: var(--panel); border: 3px solid var(--border); border-radius: 10px;
+  padding: 14px; box-shadow: 0 5px 0 var(--shadow);
+}
+.bout-weight { font-family: 'Press Start 2P'; font-size: 8px; color: var(--muted); text-align: center; margin-bottom: 10px; }
+.matchup { display: grid; grid-template-columns: 1fr auto 1fr; align-items: stretch; gap: 10px; }
+.vs { align-self: center; font-family: 'Press Start 2P'; font-size: 14px; color: var(--red); }
+
+.fighter {
+  background: var(--bg2); border: 3px solid var(--border); border-radius: 8px;
+  padding: 12px; cursor: pointer; text-align: center; transition: transform .05s;
+  position: relative;
+}
+.fighter-info {
+  position: absolute; top: 6px; right: 6px; z-index: 2;
+  background: var(--panel2); color: var(--ink); border: 2px solid var(--border);
+  border-radius: 6px; width: 24px; height: 24px; font-size: 13px; cursor: pointer; line-height: 1;
+}
+.fighter-info:hover { border-color: var(--blue); color: var(--blue); }
+.flag { cursor: help; }
+.fighter:hover { transform: translateY(-2px); border-color: var(--blue); }
+.fighter.picked { border-color: var(--gold); background: #2c2152; box-shadow: 0 0 0 2px var(--gold) inset; }
+.fighter.win { border-color: var(--green); }
+.fighter.lose { opacity: .5; }
+.avatar {
+  width: 56px; height: 56px; margin: 0 auto 8px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center; font-size: 30px;
+  image-rendering: pixelated; border: 2px solid var(--shadow); overflow: hidden;
+}
+.avatar img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+.fighter-name { font-family: 'Press Start 2P'; font-size: 9px; margin-bottom: 4px; }
+.fighter-real { font-size: 14px; color: var(--blue); opacity: .9; }
+.fighter-tag { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.fighter-odds { margin-top: 6px; font-size: 16px; color: var(--blue); }
+.fighter-mult { font-family: 'Press Start 2P'; font-size: 8px; color: var(--gold); margin-top: 4px; }
+
+.stake-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; justify-content: center; }
+.stake-row input[type=range] { width: 60%; accent-color: var(--gold); }
+.stake-val { font-family: 'Press Start 2P'; font-size: 10px; color: var(--gold); min-width: 70px; text-align: right; }
+.bout-result { text-align: center; margin-top: 10px; font-size: 17px; }
+.bout-result.void { color: var(--gold); }
+
+/* ===== Buttons ===== */
+.btn {
+  font-family: 'Press Start 2P'; font-size: 11px; cursor: pointer;
+  padding: 14px 18px; border: 3px solid var(--shadow); border-radius: 6px;
+  background: var(--panel2); color: var(--ink); box-shadow: 0 4px 0 var(--shadow);
+}
+.btn:active { transform: translateY(3px); box-shadow: none; }
+.btn-primary { background: var(--gold); color: #2a1a00; border-color: #b8901f; box-shadow: 0 4px 0 #6e5410; }
+.btn-google { background: #fff; color: #222; width: 100%; }
+.btn-ghost { background: transparent; box-shadow: none; border-color: var(--border); }
+.btn.big { font-size: 14px; padding: 18px 26px; display: inline-block; margin-top: 14px; }
+
+.play-footer { margin-top: 26px; text-align: center; }
+.play-msg { min-height: 22px; margin-top: 10px; color: var(--green); }
+
+.disclaimer {
+  margin-top: 30px; font-size: 16px; color: var(--muted);
+  background: var(--bg2); border: 2px dashed var(--border); border-radius: 8px; padding: 14px;
+}
+
+/* ===== Leaderboard ===== */
+.leaderboard { list-style: none; padding: 0; margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
+.lb-row {
+  display: flex; align-items: center; gap: 14px; padding: 12px 16px;
+  background: var(--panel); border: 3px solid var(--border); border-radius: 8px;
+}
+.lb-row.me { border-color: var(--gold); }
+.lb-rank { font-family: 'Press Start 2P'; font-size: 12px; width: 34px; color: var(--muted); }
+.lb-belt { font-size: 26px; width: 34px; text-align: center; }
+.lb-name { flex: 1; font-family: 'Press Start 2P'; font-size: 11px; }
+.lb-title { font-size: 15px; color: var(--gold); margin-left: 8px; }
+.lb-pts { font-family: 'Press Start 2P'; font-size: 12px; color: var(--green); }
+.top5 .lb-row { background: linear-gradient(90deg, #2a2150, var(--panel)); }
+
+/* ===== Cards / how ===== */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin: 20px 0; }
+.card { background: var(--panel); border: 3px solid var(--border); border-radius: 10px; padding: 16px; box-shadow: 0 4px 0 var(--shadow); }
+.card-ico { font-size: 30px; }
+.events-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 20px 0 12px; }
+.event-card {
+  background: var(--panel); border: 3px solid var(--border); border-radius: 10px;
+  padding: 16px; box-shadow: 0 4px 0 var(--shadow); min-height: 178px;
+}
+.event-card h2 { margin: 8px 0 12px; color: var(--ink); }
+.event-card p { margin: 6px 0; }
+.event-date { font-family: 'Press Start 2P'; font-size: 9px; color: var(--gold); }
+.notgambling { background: var(--bg2); border: 3px solid var(--green); border-radius: 10px; padding: 18px; margin-top: 20px; }
+.notgambling ul { list-style: none; padding: 0; }
+.notgambling li { padding: 5px 0; }
+
+/* ===== Profile / trophy shelf ===== */
+.avatar.big { width: 72px; height: 72px; font-size: 38px; }
+.profile-head { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.profile-head h1 { margin: 0; }
+.shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; margin-top: 14px; }
+.trophy {
+  background: var(--panel); border: 3px solid var(--border); border-radius: 10px;
+  padding: 16px 12px; text-align: center; box-shadow: 0 4px 0 var(--shadow);
+}
+.trophy.belt { border-color: var(--gold); background: linear-gradient(180deg,#2c2150,var(--panel)); }
+.trophy-ico { font-size: 40px; }
+.trophy-title { font-family: 'Press Start 2P'; font-size: 9px; margin: 8px 0 4px; color: var(--gold); }
+.trophy-sub { font-size: 14px; color: var(--ink); }
+.trophy-season { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+/* ===== Modal ===== */
+.modal { position: fixed; inset: 0; background: rgba(5,3,20,.85); display: flex; align-items: center; justify-content: center; z-index: 50; }
+.modal-box { background: var(--panel); border: 4px solid var(--gold); border-radius: 12px; padding: 26px; width: 340px; max-width: 92vw; position: relative; box-shadow: 0 8px 0 var(--shadow); }
+.modal-close { position: absolute; top: 10px; right: 12px; background: none; border: none; color: var(--ink); font-size: 20px; cursor: pointer; }
+.modal-box .btn { width: 100%; margin-top: 12px; }
+.modal-box.wide { width: 640px; }
+.share-canvas { width: 100%; max-width: 600px; image-rendering: pixelated; border: 3px solid var(--border); border-radius: 8px; margin: 10px 0; }
+.share-btns { display: flex; gap: 10px; }
+.share-btns .btn { margin-top: 6px; }
+textarea.input { resize: vertical; font-family: 'VT323'; }
+.input { width: 100%; padding: 12px; font-family: 'VT323'; font-size: 20px; background: var(--bg2); color: var(--ink); border: 2px solid var(--border); border-radius: 6px; margin-top: 10px; }
+.divider { text-align: center; color: var(--muted); margin: 16px 0; position: relative; }
+.divider span { background: var(--panel); padding: 0 10px; position: relative; }
+.divider::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 2px; background: var(--border); }
+.auth-msg { min-height: 20px; color: var(--green); margin-top: 8px; }
+
+/* ===== Footer ===== */
+.footer { border-top: 3px solid var(--border); padding: 22px; text-align: center; color: var(--muted); margin-top: 30px; }
+.footer em { color: var(--blue); }
+
+@media (max-width: 560px) {
+  .matchup { grid-template-columns: 1fr; }
+  .vs { transform: rotate(90deg); }
+  .nav { order: 3; width: 100%; }
+}

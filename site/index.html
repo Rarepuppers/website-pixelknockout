@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PKO — Pixel Knockout</title>
+  <meta name="description" content="Pixel Knockout (PKO): a free MMA prediction game. Predict which pixel fighter wins, earn Glory Points, climb the leaderboard. Just internet points — no money, no gambling." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/pixel.css?v=8" />
+</head>
+<body>
+  <!-- ============ HEADER ============ -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-logo">PKO</span>
+      <span class="brand-sub">PIXEL&nbsp;KNOCKOUT</span>
+    </div>
+
+    <nav class="nav">
+      <a href="#play" data-route="play" class="nav-link active">Play</a>
+      <a href="#leaderboard" data-route="leaderboard" class="nav-link">Leaderboard</a>
+      <a href="#events" data-route="events" class="nav-link">Events</a>
+      <a href="#profile" data-route="profile" class="nav-link">Profile</a>
+      <a href="#how" data-route="how" class="nav-link">How it works</a>
+      <a href="#support" data-route="support" class="nav-link">Support</a>
+    </nav>
+
+    <div class="account" id="account-box">
+      <!-- filled by app.js -->
+    </div>
+  </header>
+
+  <main id="app">
+    <!-- ============ PLAY VIEW ============ -->
+    <section id="view-play" class="view">
+      <div class="event-head">
+        <div>
+          <p class="kicker">CURRENT EVENT CARD</p>
+          <h1 id="event-title">—</h1>
+          <p id="event-date" class="muted"></p>
+          <p id="event-real" class="small muted"></p>
+          <p id="lock-timer" class="lock-timer"></p>
+        </div>
+        <div class="bank">
+          <span class="bank-label">YOUR GLORY POINTS</span>
+          <span class="bank-value" id="bank-value">0</span>
+          <span class="bank-note" id="bank-note"></span>
+        </div>
+      </div>
+
+      <div id="bonus-panel" class="bonus-panel hidden"></div>
+
+      <div id="bouts" class="bouts"><!-- bouts render here --></div>
+
+      <div class="play-footer">
+        <button id="submit-picks" class="btn btn-primary">LOCK IN PREDICTIONS</button>
+        <p id="play-msg" class="play-msg"></p>
+      </div>
+
+      <p class="disclaimer">
+        ⚖️ PKO is a free game for fun and bragging rights. Glory Points are internet
+        points with <strong>zero monetary value</strong>. You cannot buy, sell, trade,
+        or cash them out. Points are free with every event and reset each year.
+        This is <strong>not gambling</strong>. PKO is an unaffiliated parody — not
+        endorsed by any fighter, promotion, or organization.
+      </p>
+    </section>
+
+    <!-- ============ LEADERBOARD VIEW ============ -->
+    <section id="view-leaderboard" class="view hidden">
+      <p class="kicker">SEASON <span id="season-year"></span> — RESETS JAN 1</p>
+      <h1>🏆 Leaderboard</h1>
+      <p class="muted">Top 5 wear a virtual belt. Cosmetic only — zero value, pure bragging rights.</p>
+      <ol id="leaderboard-list" class="leaderboard"></ol>
+    </section>
+
+    <!-- ============ EVENTS VIEW ============ -->
+    <section id="view-events" class="view hidden">
+      <p class="kicker">UPCOMING UFC EVENTS</p>
+      <h1>Next cards</h1>
+      <p class="muted">Pulled from Wikipedia when available, with a local fallback so the page never goes blank.</p>
+      <div id="events-list" class="events-list"></div>
+      <p id="events-source" class="muted small"></p>
+    </section>
+
+    <!-- ============ HOW IT WORKS VIEW ============ -->
+    <section id="view-how" class="view hidden">
+      <h1>How PKO works</h1>
+      <div class="cards">
+        <div class="card"><span class="card-ico">🎟️</span><h3>Free points, every event</h3><p>Every UFC/MMA event, everyone gets the same <strong>1,000 Glory Points</strong>. No one can buy more — there's no store.</p></div>
+        <div class="card"><span class="card-ico">🥊</span><h3>Predict the winner</h3><p>We drop our pixel parody fighters into the real matchups and spend points predicting who wins. We only use the real fight's <em>result</em> to settle.</p></div>
+        <div class="card"><span class="card-ico">📈</span><h3>Odds = difficulty</h3><p>Real Vegas odds set the multiplier. Call an upset, win more points. Play it safe, win less.</p></div>
+        <div class="card"><span class="card-ico">🏆</span><h3>Belts &amp; bragging rights</h3><p>Climb the season leaderboard. Top 5 wear cosmetic belts. Board resets every year (2026, 2027, …).</p></div>
+      </div>
+      <div class="notgambling">
+        <h2>This is not gambling</h2>
+        <ul>
+          <li>✅ Glory Points have <strong>zero</strong> monetary value.</li>
+          <li>🚫 You <strong>cannot buy</strong> points — money never enters the game.</li>
+          <li>🚫 You <strong>cannot sell, trade, transfer, or cash out</strong> points.</li>
+          <li>🎁 There are <strong>no prizes</strong> — just a number on a scoreboard.</li>
+          <li>🔁 Points are free with every event and reset each year.</li>
+        </ul>
+        <p class="muted">Gambling requires paying to play and a prize of value. PKO has neither — it's the same as a free office prediction pool or Reddit karma.</p>
+      </div>
+    </section>
+
+    <!-- ============ SUPPORT VIEW ============ -->
+    <section id="view-support" class="view hidden">
+      <h1>Support the dev ☕</h1>
+      <p>PKO is free and always will be. If you enjoy it, you can drop a tip to keep
+        the servers and pixel art coming. <strong>Donating gives you nothing in-game</strong>
+        — no points, no rank, no perks. It's a pure thank-you.</p>
+      <a id="donate-link" class="btn btn-primary big" href="#" target="_blank" rel="noopener">💚 Donate via Stripe</a>
+      <p class="muted small">Replace the link in <code>js/config.js</code> with your Stripe Payment Link.</p>
+    </section>
+    <!-- ============ PROFILE VIEW ============ -->
+    <section id="view-profile" class="view hidden">
+      <div id="profile-body"><!-- rendered by app.js --></div>
+    </section>
+  </main>
+
+  <!-- ============ FIGHTER PROFILE MODAL ============ -->
+  <div id="fighter-modal" class="modal hidden">
+    <div class="modal-box wide">
+      <button class="modal-close" id="fighter-close">✕</button>
+      <div id="fighter-body"><!-- rendered by app.js --></div>
+    </div>
+  </div>
+
+  <!-- ============ SHARE MODAL ============ -->
+  <div id="share-modal" class="modal hidden">
+    <div class="modal-box wide">
+      <button class="modal-close" id="share-close">✕</button>
+      <h2>Share your result 📣</h2>
+      <canvas id="share-canvas" width="600" height="320" class="share-canvas"></canvas>
+      <textarea id="share-text" class="input" rows="3" readonly></textarea>
+      <div class="share-btns">
+        <button id="share-copy" class="btn btn-primary">📋 Copy text</button>
+        <button id="share-download" class="btn btn-ghost">⬇ Download image</button>
+      </div>
+      <p id="share-msg" class="auth-msg"></p>
+      <p class="muted small">Drop it in r/MMA or send it to your group chat.</p>
+    </div>
+  </div>
+
+  <!-- ============ USERNAME MODAL ============ -->
+  <div id="name-modal" class="modal hidden">
+    <div class="modal-box">
+      <h2>Pick your fighter name</h2>
+      <p class="muted">This shows on the leaderboard and your profile. Keep it clean —
+        offensive names are blocked.</p>
+      <input id="name-input" class="input" maxlength="18" placeholder="e.g. PixelPanther" />
+      <button id="btn-savename" class="btn btn-primary">Enter the Octagon →</button>
+      <p id="name-msg" class="auth-msg"></p>
+    </div>
+  </div>
+
+  <!-- ============ AUTH MODAL ============ -->
+  <div id="auth-modal" class="modal hidden">
+    <div class="modal-box">
+      <button class="modal-close" id="auth-close">✕</button>
+      <h2>Enter the Octagon</h2>
+      <p class="muted">Sign in to save your Glory Points and join the leaderboard.</p>
+      <button id="btn-google" class="btn btn-google">🔓 Continue with Google</button>
+      <div class="divider"><span>or</span></div>
+      <input id="email-input" type="email" class="input" placeholder="you@email.com" />
+      <button id="btn-email" class="btn btn-primary">Send magic link</button>
+      <p id="auth-msg" class="auth-msg"></p>
+      <p class="muted small" id="auth-mode-note"></p>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <p>PKO — Pixel Knockout · <em>"Welcome to the Player Kill Octagon."</em></p>
+    <p class="small muted">A parody fan game. Not affiliated with, endorsed by, or connected to any real fighter, promotion, or organization. Any likeness is coincidental and used in good faith.</p>
+    <p class="small muted">No gambling: PKO uses only virtual internet points that cannot be bought, sold, traded, transferred, or cashed out. There are no services or products to buy.</p>
+    <p class="small"><a href="terms.html">Terms of Service</a> · <a href="privacy.html">Privacy Policy</a></p>
+  </footer>
+
+  <script src="js/config.js?v=8"></script>
+  <script src="js/data.js?v=8"></script>
+  <script src="js/store.js?v=8"></script>
+  <script src="js/app.js?v=8"></script>
+</body>
+</html>
