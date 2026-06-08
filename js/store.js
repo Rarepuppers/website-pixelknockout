@@ -333,7 +333,7 @@
     // ---------- points / predictions ----------
     async getPoints() {
       if (useSupabase) { const c = await getSb();
-        const { data } = await c.from("season_scores").select("points").eq("season", SEASON).single();
+        const { data } = await c.from("season_scores").select("points").eq("season", SEASON).eq("user_id", this.user.id).single();
         return (data && data.points) || 0; }
       const s = ensure(load()); return s.points[SEASON] || 0;
     },
@@ -373,6 +373,7 @@
         const m = {}; (data || []).forEach(p => m[p.bout_id] = Object.assign({}, p, {
           boutId: p.bout_id,
           multiplier: Number(p.multiplier),
+          voided: ["void", "draw", "cancelled"].includes(p.result),
         })); return m; }
       const s = ensure(load()); return s.predictions[eventId] || {};
     },
@@ -433,6 +434,84 @@
         stake: p.stake, finished: !remaining, awarded };
     },
 
+    async isAdmin() {
+      const email = this.user && this.user.email;
+      const admins = CFG.ADMIN_EMAILS || [];
+      return !!email && admins.map(x => String(x).toLowerCase()).includes(String(email).toLowerCase());
+    },
+    async getBoutResults(eventId) {
+      if (useSupabase) {
+        const c = await getSb();
+        const { data, error } = await c.from("bout_results").select("*").eq("event_id", eventId);
+        if (error) throw new Error(error.message);
+        const m = {};
+        (data || []).forEach(r => m[r.bout_id] = {
+          eventId: r.event_id, boutId: r.bout_id, result: r.result,
+          winType: r.win_type || "", methodDetail: r.method_detail || "",
+          settledCount: r.settled_count || 0, refundedCount: r.refunded_count || 0,
+          settledAt: r.settled_at,
+        });
+        return m;
+      }
+      const s = ensure(load());
+      return (s.boutResults && s.boutResults[eventId]) || {};
+    },
+    async adminSettleBout(eventId, boutId, result, winType = "", methodDetail = "") {
+      if (!await this.isAdmin()) throw new Error("Admin access required.");
+      if (!["a", "b", "void", "draw", "cancelled"].includes(result)) throw new Error("Choose a valid result.");
+      if (useSupabase) {
+        const c = await getSb();
+        const { data, error } = await c.rpc("admin_settle_bout", {
+          p_event: eventId,
+          p_bout: boutId,
+          p_result: result,
+          p_win_type: winType || null,
+          p_method_detail: methodDetail || null,
+        });
+        if (error) throw new Error(error.message);
+        return Array.isArray(data) ? data[0] : data;
+      }
+
+      const s = ensure(load());
+      s.boutResults = s.boutResults || {};
+      s.boutResults[eventId] = s.boutResults[eventId] || {};
+      if (s.boutResults[eventId][boutId]) throw new Error("That bout has already been settled.");
+      const preds = s.predictions[eventId] || {};
+      const bout = this.EVENT.bouts.find(b => b.id === boutId);
+      if (!bout) throw new Error("Bout not found.");
+      let settledCount = 0, refundedCount = 0, winCount = 0, lossCount = 0;
+      Object.keys(preds).forEach(id => {
+        if (id !== boutId || preds[id].settled) return;
+        const p = preds[id];
+        settledCount += 1;
+        if (["void", "draw", "cancelled"].includes(result)) {
+          this._addPoints(s, p.stake, { type: "prediction_refund", eventId, label: `${bout.weight} result refund` });
+          p.voided = true; p.won = 0; refundedCount += 1;
+        } else if (p.pick === result) {
+          p.won = Math.round(p.stake * p.multiplier);
+          this._addPoints(s, p.won, { type: "prediction_win", eventId, label: `${bout[p.pick].name} prediction win` });
+          winCount += 1;
+        } else {
+          s.history.unshift({
+            id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+            season: SEASON, type: "prediction_loss", eventId,
+            label: `${bout[p.pick].name} prediction missed`, amount: 0,
+            balance: s.points[SEASON] || 0, createdAt: new Date().toISOString(),
+          });
+          p.won = 0; lossCount += 1;
+        }
+        p.settled = true; p.result = result;
+      });
+      bout.result = result;
+      bout.winType = winType || methodDetail || bout.winType || "";
+      s.boutResults[eventId][boutId] = {
+        eventId, boutId, result, winType, methodDetail,
+        settledCount, refundedCount, settledAt: new Date().toISOString(),
+      };
+      save(s);
+      return { settled_count: settledCount, refunded_count: refundedCount, win_count: winCount, loss_count: lossCount };
+    },
+
     // ---------- trophies / belts (virtual, zero value) ----------
     BELTS: { 1:{icon:"🏆",title:"Undisputed Champ"},2:{icon:"🥈",title:"Interim Champ"},
       3:{icon:"🥉",title:"#1 Contender"},4:{icon:"🎖️",title:"Top Contender"},5:{icon:"🎖️",title:"Ranked Contender"} },
@@ -487,12 +566,12 @@
     async getEventRecord(eventId) {
       const preds = await this.getPredictions(eventId);
       const vals = Object.values(preds);
-      const counted = vals.filter(p => !p.voided);     // voided picks don't count
+      const counted = vals.filter(p => !p.voided && !["void", "draw", "cancelled"].includes(p.result));
       const settled = counted.filter(p => p.settled);
       return {
         total: counted.length,
         hits: settled.filter(p => p.won > 0).length,
-        voided: vals.filter(p => p.voided).length,
+        voided: vals.filter(p => p.voided || ["void", "draw", "cancelled"].includes(p.result)).length,
         settledCount: vals.filter(p => p.settled).length,
         finished: vals.length > 0 && vals.every(p => p.settled),
       };
@@ -577,12 +656,12 @@
       });
       if (this.user && this.user.nameChosen) {
         const preds = Object.values(s.predictions[eventId] || {});
-        const settled = preds.filter(p => p.settled && !p.voided);
+        const settled = preds.filter(p => p.settled && !p.voided && !["void", "draw", "cancelled"].includes(p.result));
         const committed = preds.reduce((n, p) => n + (Number(p.stake) || 0), 0);
-        const returned = preds.reduce((n, p) => n + (Number(p.won) || 0) + (p.voided ? Number(p.stake) || 0 : 0), 0);
+        const returned = preds.reduce((n, p) => n + (Number(p.won) || 0) + ((p.voided || ["void", "draw", "cancelled"].includes(p.result)) ? Number(p.stake) || 0 : 0), 0);
         rows.push({ id: this.user.id, name: this.user.name, eventPoints: returned - committed,
           committed, returned, hits: settled.filter(p => p.won > 0).length,
-          misses: settled.filter(p => !p.won).length, voided: preds.filter(p => p.voided).length,
+          misses: settled.filter(p => !p.won).length, voided: preds.filter(p => p.voided || ["void", "draw", "cancelled"].includes(p.result)).length,
           settled: preds.filter(p => p.settled).length, total: preds.length, me: true });
       }
       return rows.sort((a, b) => b.eventPoints - a.eventPoints || b.hits - a.hits);

@@ -13,6 +13,25 @@
     const inner = f.img ? `<img src="${esc(f.img)}" alt="${esc(f.name)}" />` : (f.emoji || "🥊");
     return `<div class="avatar ${extra}" style="background:${f.color}">${inner}</div>`;
   };
+  const flagSlug = country => {
+    const key = String(country || "Parts Unknown").toLowerCase();
+    const map = {
+      "united states (hawaii)": "hawaii",
+      "united states": "united-states",
+      "united arab emirates": "united-arab-emirates",
+      "dominican republic": "dominican-republic",
+      "new zealand": "new-zealand",
+      "south africa": "south-africa",
+      "parts unknown": "unknown",
+    };
+    return map[key] || key.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "unknown";
+  };
+  const flagHTML = (country, shape = "square") => {
+    const dir = shape === "rect" ? "64x48" : "64x64";
+    const slug = flagSlug(country);
+    return `<img class="flag-img ${shape}" src="assets/flags/${dir}/${slug}.png" alt="${esc(country || "Unknown")} pixel flag" loading="lazy" />`;
+  };
 
   const rankLabel = r => !r ? "UR" : (r.champion ? "C" : (r.interim ? "IC" : `#${r.rank}`));
   const rankTitle = r => !r ? "Unranked" : `${r.division} ${r.champion ? "Champion" : r.interim ? "Interim Champion" : "rank " + r.rank}${r.p4p ? ` · P4P #${r.p4p}` : ""}`;
@@ -55,7 +74,7 @@
         ${avatarHTML(f, "big")}
         <div><h1>${esc(f.name)}</h1>
           <p class="rank-line">${rankChip(f.ranking)} ${f.ranking ? esc(rankTitle(f.ranking)) : "Unranked"}</p>
-          <p class="muted">as ${esc(f.real)} · <span class="flag" title="${esc(f.country || "Parts Unknown")}">${f.flag || "🏴"}</span> ${esc(f.country || "Parts Unknown")}</p>
+          <p class="muted">as ${esc(f.real)} · <span class="flag" title="${esc(f.country || "Parts Unknown")}">${flagHTML(f.country || "Parts Unknown")}</span> ${esc(f.country || "Parts Unknown")}</p>
           <p class="fighter-tag">${esc(f.tag)}</p></div>
       </div>
       <h2 style="margin-top:18px">📋 Real facts</h2>
@@ -111,6 +130,7 @@
   }
 
   async function renderPlay() {
+    await applyOfficialBoutResults();
     $("#event-title").textContent = EVENT.title;
     $("#event-date").textContent = EVENT.date + " · Season " + EVENT.season;
     $("#event-real").textContent = `${EVENT.realTitle} · ${oddsSourceLabel()}`;
@@ -188,6 +208,18 @@
         $(".play-footer").appendChild(sh);
       }
     }
+  }
+
+  async function applyOfficialBoutResults() {
+    try {
+      const results = await store.getBoutResults(EVENT.id);
+      EVENT.bouts.forEach(b => {
+        const r = results[b.id];
+        if (!r) return;
+        b.result = r.result === "cancelled" ? "void" : r.result;
+        b.winType = r.winType || r.methodDetail || b.winType || "";
+      });
+    } catch {}
   }
 
   async function renderBonusPanel(signed) {
@@ -734,7 +766,7 @@
             <span class="roster-rank">${rankChip(f.ranking)} ${f.ranking ? `<span>${esc(f.ranking.division)}${f.ranking.p4p ? ` · P4P #${esc(f.ranking.p4p)}` : ""}</span>` : `<span>Unranked</span>`}</span>
             <span>${esc(f.name)}</span>
             <span class="pixel-name">${esc(f.pixelName)}</span>
-            <span>${esc(f.flag || "")} ${esc(f.country || "Parts Unknown")}</span>
+            <span class="country-cell">${flagHTML(f.country || "Parts Unknown", "rect")} ${esc(f.country || "Parts Unknown")}</span>
             <span>${esc(f.pixelTag || "")}</span>
           </div>`).join("")}
         </div>
@@ -768,31 +800,114 @@
     `).join("");
   }
 
-  function renderAdminResults() {
+  async function renderAdminResults() {
     const body = $("#admin-results-body");
     if (!body) return;
-    const email = store.user && store.user.email;
-    const admins = CFG.ADMIN_EMAILS || [];
-    const allowed = !!email && admins.map(x => String(x).toLowerCase()).includes(String(email).toLowerCase());
+    const allowed = await store.isAdmin();
     if (!allowed) {
-      body.innerHTML = `<div class="empty-state">Admin result tools are locked. Sign in with an approved admin email when the server-side settlement function is ready.</div>
+      body.innerHTML = `<div class="empty-state">Admin result tools are locked. Sign in with an approved admin email to enter official fight outcomes.</div>
         <div class="source-panel">
-          <p><strong>Launch note:</strong> This public page is only a placeholder. Real result settlement must run through Supabase RLS, an Edge Function, or another server-side admin path.</p>
-          <p class="small muted">Current admin target: enter official fight outcomes, mark cancelled bouts as void, write point history, and refresh event leaderboards after each fight.</p>
+          <p><strong>How settlement works:</strong> Results are entered manually from official post-fight sources. The Supabase RPC checks the signed-in admin email before it changes points.</p>
+          <p class="small muted">Admin email allowlist is stored in Supabase. Do not rely on the public config alone for write access.</p>
         </div>`;
       return;
     }
-    const open = EVENT.bouts.filter(b => !b.result).length;
+    let results = {};
+    try { results = await store.getBoutResults(EVENT.id); }
+    catch (e) {
+      body.innerHTML = `<div class="empty-state">Could not load bout results: ${esc(e.message)}</div>`;
+      return;
+    }
+    const settled = Object.keys(results).length;
     body.innerHTML = `<div class="source-panel">
       <p><strong>${esc(EVENT.shortTitle || EVENT.title)}</strong></p>
-      <p class="small muted">${EVENT.bouts.length - open}/${EVENT.bouts.length} fights have local outcomes. Last viewed ${esc(formatStatusTimestamp())}.</p>
+      <p class="small muted">${settled}/${EVENT.bouts.length} fights have official/manual outcomes. Last viewed ${esc(formatStatusTimestamp())}.</p>
+      <p class="small muted">One-way settlement: after a bout is settled, correction requires a manual database repair. Confirm the official result before pressing settle.</p>
+      <p class="small muted">Result sources: <a href="https://www.ufc.com/results" target="_blank" rel="noopener">UFC results</a> · <a href="https://en.wikipedia.org/wiki/List_of_UFC_events" target="_blank" rel="noopener">Wikipedia UFC events</a> · <a href="https://www.ufcstats.com/statistics/events/completed" target="_blank" rel="noopener">UFCStats completed events</a></p>
     </div>
-    <div class="rules-grid admin-checklist">
-      <div class="rule-block"><h2>1. Confirm official result</h2><p>Use official post-fight sources before entering winner, win type, round, and cancelled/void status.</p></div>
-      <div class="rule-block"><h2>2. Settle one fight</h2><p>Server function should refund voids, credit correct picks, leave missed picks at zero return, and write point history.</p></div>
-      <div class="rule-block"><h2>3. Refresh leaderboard</h2><p>Event leaderboard should move after every settled fight; overall leaderboard changes when points are returned.</p></div>
-      <div class="rule-block"><h2>4. Award final badges</h2><p>When the full card is final, award virtual badges, belts, and shrine items with zero monetary value.</p></div>
-    </div>`;
+    <div class="admin-result-list">
+      ${EVENT.bouts.map(b => adminBoutHTML(b, results[b.id])).join("")}
+    </div>
+    <p id="admin-msg" class="auth-msg"></p>`;
+
+    $$(".admin-settle", body).forEach(btn => {
+      btn.onclick = async () => {
+        const row = btn.closest(".admin-bout");
+        const bout = EVENT.bouts.find(b => b.id === row.dataset.bout);
+        const result = $(".admin-result", row).value;
+        const winType = $(".admin-win-type", row).value.trim();
+        const detail = $(".admin-detail", row).value.trim();
+        if (!result) { $("#admin-msg").textContent = "Choose a result first."; return; }
+        if ((result === "a" || result === "b") && !winType) {
+          $("#admin-msg").textContent = "Choose a win type for completed fights.";
+          return;
+        }
+        btn.disabled = true;
+        $("#admin-msg").textContent = `Settling ${bout.weight}...`;
+        try {
+          const res = await store.adminSettleBout(EVENT.id, bout.id, result, winType, detail);
+          const count = res && (res.settled_count ?? res.settledCount ?? 0);
+          $("#admin-msg").textContent = `Settled ${bout.weight}. Updated ${count} player picks.`;
+          if (result === "a" || result === "b") {
+            bout.result = result;
+            bout.winType = winType || detail;
+          } else {
+            bout.result = result === "cancelled" ? "void" : result;
+            bout.winType = result;
+          }
+          await renderAdminResults();
+          renderPlay();
+          if (!$("#view-leaderboard").classList.contains("hidden")) renderLeaderboard();
+        } catch (e) {
+          btn.disabled = false;
+          $("#admin-msg").textContent = "Settlement failed: " + e.message;
+        }
+      };
+    });
+  }
+
+  function adminBoutHTML(b, result) {
+    const settled = !!result;
+    const label = result ? adminResultLabel(b, result) : "Awaiting official result";
+    return `<article class="admin-bout" data-bout="${esc(b.id)}">
+      <div>
+        <p class="kicker">${esc(b.weight)}</p>
+        <h2>${esc(b.a.real)} vs ${esc(b.b.real)}</h2>
+        <p class="muted small">${esc(label)}</p>
+      </div>
+      <div class="admin-controls">
+        <select class="input admin-result" ${settled ? "disabled" : ""}>
+          <option value="">Result</option>
+          <option value="a">${esc(b.a.real)} wins</option>
+          <option value="b">${esc(b.b.real)} wins</option>
+          <option value="draw">Draw - refund</option>
+          <option value="void">Fight cancelled - refund</option>
+          <option value="cancelled">No contest/cancelled - refund</option>
+        </select>
+        <select class="input admin-win-type" ${settled ? "disabled" : ""}>
+          <option value="">Win type</option>
+          <option>TKO</option>
+          <option>Split decision</option>
+          <option>Decision</option>
+          <option>Unanimous decision</option>
+          <option>Submission</option>
+          <option>Draw</option>
+          <option>Disqualified</option>
+          <option>Fight cancelled</option>
+        </select>
+        <input class="input admin-detail" placeholder="Method detail, round, or source note" ${settled ? "disabled" : ""} />
+        <button class="btn btn-primary admin-settle" ${settled ? "disabled" : ""}>${settled ? "Settled" : "Settle fight"}</button>
+      </div>
+    </article>`;
+  }
+
+  function adminResultLabel(b, r) {
+    if (r.result === "a" || r.result === "b") {
+      const who = b[r.result]?.real || b[r.result]?.name || "Winner";
+      return `${who} won${r.winType ? " by " + r.winType : ""}${r.methodDetail ? " - " + r.methodDetail : ""}`;
+    }
+    if (r.result === "draw") return "Draw - committed points refunded";
+    return "Fight cancelled/void - committed points refunded";
   }
 
   // ---------- profile ----------

@@ -116,7 +116,14 @@ a { color: var(--blue); text-decoration: none; }
   border-radius: 6px; width: 24px; height: 24px; font-size: 13px; cursor: pointer; line-height: 1;
 }
 .fighter-info:hover { border-color: var(--blue); color: var(--blue); }
-.flag { cursor: help; }
+.flag { cursor: help; display: inline-flex; align-items: center; vertical-align: middle; }
+.flag-img {
+  display: inline-block; image-rendering: pixelated; vertical-align: middle;
+  border: 1px solid var(--shadow); background: var(--bg2); object-fit: cover;
+}
+.flag-img.square { width: 24px; height: 24px; border-radius: 4px; }
+.flag-img.rect { width: 32px; height: 24px; border-radius: 3px; }
+.country-cell { display: inline-flex; align-items: center; gap: 8px; }
 .fighter:hover { transform: translateY(-2px); border-color: var(--blue); }
 .fighter.picked { border-color: var(--gold); background: #2c2152; box-shadow: 0 0 0 2px var(--gold) inset; }
 .fighter.win { border-color: var(--green); }
@@ -367,6 +374,21 @@ a { color: var(--blue); text-decoration: none; }
   color: var(--blue); border: 2px solid var(--border); border-radius: 6px; padding: 6px 8px;
 }
 .priority-tag.critical { color: var(--red); border-color: var(--red); }
+.admin-result-list { display: flex; flex-direction: column; gap: 14px; margin-top: 18px; }
+.admin-bout {
+  display: grid; grid-template-columns: minmax(220px, 1fr) 1.4fr; gap: 14px; align-items: start;
+  background: var(--panel); border: 3px solid var(--border); border-radius: 10px;
+  padding: 14px; box-shadow: 0 4px 0 var(--shadow);
+}
+.admin-bout h2 { margin: 4px 0; }
+.admin-controls {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
+}
+.admin-controls .admin-detail { grid-column: 1 / -1; }
+.admin-controls .btn { width: 100%; }
+.admin-controls .btn:disabled {
+  opacity: .6; cursor: not-allowed; transform: none; box-shadow: none;
+}
 .roster-body { display: flex; flex-direction: column; gap: 22px; margin-top: 20px; }
 .roster-division h2 { color: var(--gold); }
 .roster-table {
@@ -561,6 +583,8 @@ textarea.input { resize: vertical; font-family: 'VT323'; }
   .tip-art { max-height: 220px; }
   .newsletter-panel { grid-template-columns: 1fr; }
   .nav { order: 3; width: 100%; }
+  .admin-bout { grid-template-columns: 1fr; }
+  .admin-controls { grid-template-columns: 1fr; }
   .season-panel { grid-template-columns: 1fr; }
   .roster-row { grid-template-columns: 1fr; gap: 4px; }
   .roster-head { display: none; }

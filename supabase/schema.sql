@@ -68,6 +68,16 @@ create table if not exists event_bonus_claims (
   primary key (user_id, bonus_id)
 );
 
+-- admin allowlist for manual result settlement
+create table if not exists admin_emails (
+  email text primary key,
+  created_at timestamptz default now()
+);
+
+insert into public.admin_emails (email)
+values ('info@pixelknockout.com')
+on conflict (email) do nothing;
+
 -- immutable point ledger for player profiles
 create table if not exists point_history (
   id bigint generated always as identity primary key,
@@ -96,6 +106,20 @@ create table if not exists predictions (
   result text,
   created_at timestamptz default now(),
   unique (user_id, event_id, bout_id)
+);
+
+-- official/manual bout result records entered by an admin
+create table if not exists bout_results (
+  event_id text not null,
+  bout_id text not null,
+  result text not null check (result in ('a','b','void','draw','cancelled')),
+  win_type text,
+  method_detail text,
+  settled_count int not null default 0,
+  refunded_count int not null default 0,
+  settled_by uuid references auth.users,
+  settled_at timestamptz default now(),
+  primary key (event_id, bout_id)
 );
 
 -- ---------- trophies (virtual, zero value) ----------
@@ -128,12 +152,12 @@ create or replace view event_leaderboard as
     pr.event_id,
     count(*)::int as total_fights,
     count(*) filter (where pr.settled)::int as settled_fights,
-    count(*) filter (where pr.result = 'void')::int as voided,
-    count(*) filter (where pr.settled and pr.result <> 'void' and pr.won > 0)::int as hits,
-    count(*) filter (where pr.settled and pr.result <> 'void' and pr.won = 0)::int as misses,
+    count(*) filter (where pr.result in ('void','draw','cancelled'))::int as voided,
+    count(*) filter (where pr.settled and pr.result not in ('void','draw','cancelled') and pr.won > 0)::int as hits,
+    count(*) filter (where pr.settled and pr.result not in ('void','draw','cancelled') and pr.won = 0)::int as misses,
     coalesce(sum(pr.stake), 0)::int as committed_points,
-    coalesce(sum(case when pr.result = 'void' then pr.stake else pr.won end), 0)::int as returned_points,
-    (coalesce(sum(case when pr.result = 'void' then pr.stake else pr.won end), 0) - coalesce(sum(pr.stake), 0))::int as event_points
+    coalesce(sum(case when pr.result in ('void','draw','cancelled') then pr.stake else pr.won end), 0)::int as returned_points,
+    (coalesce(sum(case when pr.result in ('void','draw','cancelled') then pr.stake else pr.won end), 0) - coalesce(sum(pr.stake), 0))::int as event_points
   from predictions pr
   join profiles p on p.id = pr.user_id
   where p.name_chosen = true
@@ -145,8 +169,10 @@ alter table season_scores enable row level security;
 alter table event_grants  enable row level security;
 alter table event_bonus_windows enable row level security;
 alter table event_bonus_claims  enable row level security;
+alter table admin_emails enable row level security;
 alter table point_history enable row level security;
 alter table predictions   enable row level security;
+alter table bout_results  enable row level security;
 alter table trophies      enable row level security;
 
 drop policy if exists "read profiles" on public.profiles;
@@ -156,6 +182,7 @@ drop policy if exists "read bonus windows" on public.event_bonus_windows;
 drop policy if exists "read own bonus claims" on public.event_bonus_claims;
 drop policy if exists "read own point history" on public.point_history;
 drop policy if exists "own preds" on public.predictions;
+drop policy if exists "read bout results" on public.bout_results;
 drop policy if exists "read trophies" on public.trophies;
 drop policy if exists "read own trophies" on public.trophies;
 
@@ -166,6 +193,7 @@ create policy "read bonus windows" on event_bonus_windows for select using (true
 create policy "read own bonus claims" on event_bonus_claims for select using (auth.uid() = user_id);
 create policy "read own point history" on point_history for select using (auth.uid() = user_id);
 create policy "own preds"      on predictions   for select using (auth.uid() = user_id);
+create policy "read bout results" on bout_results for select using (true);
 create policy "read own trophies"  on trophies  for select using (auth.uid() = user_id);
 -- No client INSERT/UPDATE on points/predictions/trophies: only the SECURITY
 -- DEFINER functions below write points. That's what makes points unmintable.
@@ -275,6 +303,110 @@ begin
   returning points into new_bal;
   insert into public.point_history (user_id, season, kind, event_id, label, amount, balance)
   values (auth.uid(), yr, 'prediction_stake', p_event, 'Locked predictions for ' || upper(p_event), -total, new_bal);
+end; $$;
+
+create or replace function public._is_admin()
+returns boolean language sql security definer
+set search_path = '' as $$
+  select exists (
+    select 1
+    from public.admin_emails a
+    where lower(a.email) = lower(coalesce(auth.jwt()->>'email', ''))
+  );
+$$;
+
+create or replace function public.admin_settle_bout(
+  p_event text,
+  p_bout text,
+  p_result text,
+  p_win_type text default null,
+  p_method_detail text default null
+)
+returns table(settled_count int, refunded_count int, win_count int, loss_count int)
+language plpgsql security definer
+set search_path = '' as $$
+declare
+  rec public.predictions%rowtype;
+  yr int := extract(year from now())::int;
+  movement int;
+  new_bal int;
+  kind text;
+  label text;
+  settled_total int := 0;
+  refunded_total int := 0;
+  wins_total int := 0;
+  losses_total int := 0;
+begin
+  if not public._is_admin() then
+    raise exception 'Admin access required';
+  end if;
+  if p_result is null or p_result not in ('a','b','void','draw','cancelled') then
+    raise exception 'Invalid result';
+  end if;
+  if exists (select 1 from public.bout_results where event_id = p_event and bout_id = p_bout) then
+    raise exception 'That bout has already been settled';
+  end if;
+
+  for rec in
+    select * from public.predictions
+    where event_id = p_event and bout_id = p_bout and settled = false
+    for update
+  loop
+    settled_total := settled_total + 1;
+
+    if p_result in ('void','draw','cancelled') then
+      movement := rec.stake;
+      kind := 'prediction_refund';
+      label := upper(p_event) || ' ' || p_bout || ' refund';
+      refunded_total := refunded_total + 1;
+      update public.season_scores
+         set points = points + movement
+       where user_id = rec.user_id and season = yr
+       returning points into new_bal;
+    elsif rec.pick = p_result then
+      movement := round(rec.stake * rec.multiplier)::int;
+      kind := 'prediction_win';
+      label := upper(p_event) || ' ' || p_bout || ' prediction win';
+      wins_total := wins_total + 1;
+      update public.season_scores
+         set points = points + movement
+       where user_id = rec.user_id and season = yr
+       returning points into new_bal;
+    else
+      movement := 0;
+      kind := 'prediction_loss';
+      label := upper(p_event) || ' ' || p_bout || ' prediction missed';
+      losses_total := losses_total + 1;
+      select points into new_bal
+        from public.season_scores
+       where user_id = rec.user_id and season = yr;
+    end if;
+
+    update public.predictions
+       set settled = true,
+           result = p_result,
+           won = case when p_result in ('a','b') and rec.pick = p_result then movement else 0 end
+     where id = rec.id;
+
+    insert into public.point_history (user_id, season, kind, event_id, label, amount, balance)
+    values (rec.user_id, yr, kind, p_event, label, movement, coalesce(new_bal, 0));
+  end loop;
+
+  insert into public.bout_results (
+    event_id, bout_id, result, win_type, method_detail,
+    settled_count, refunded_count, settled_by, settled_at
+  )
+  values (
+    p_event, p_bout, p_result, nullif(trim(coalesce(p_win_type, '')), ''),
+    nullif(trim(coalesce(p_method_detail, '')), ''), settled_total,
+    refunded_total, auth.uid(), now()
+  );
+
+  settled_count := settled_total;
+  refunded_count := refunded_total;
+  win_count := wins_total;
+  loss_count := losses_total;
+  return next;
 end; $$;
 
 -- Current configured live-event bonuses. Keep this aligned with `js/data.js`.

@@ -69,9 +69,13 @@ or GitHub Action if you later need one shared schedule snapshot for every visito
 ## Event leaderboard and results
 PKO has two leaderboard surfaces: the overall season leaderboard and a current
 event leaderboard. The event leaderboard is based on the current card only and
-updates after each settled fight. Use official/manual settlement for fight
-results in production. The Odds API is for card difficulty/pricing data, not
-official results, and scraping Google is not a reliable production result feed.
+updates after each settled fight. Use the locked `#admin` results page to enter
+official/manual outcomes; the Supabase RPC checks the admin email allowlist,
+settles each bout once, refunds cancelled/draw outcomes, writes point history,
+and updates the event leaderboard. Use UFC.com results, UFCStats completed
+events, or the event's Wikipedia page as the human verification source before
+pressing settle. The Odds API is for card difficulty/pricing data, not official
+results, and scraping Google is not a reliable production result feed.
 
 ## Deploy
 Static site - publish this repository root on GitHub Pages, Vercel, or Netlify,
@@ -86,6 +90,8 @@ then point `pixelknockout.com` at it.
 | `js/data.js` | Pixel roster + ranking snapshot + legends archive + sample event card + difficulty multiplier |
 | `js/store.js` | Auth + game state (local + Supabase backends) |
 | `js/app.js` | UI + routing |
+| `assets/flags/64x64/` | Square pixel flag icons for compact profile/UI labels |
+| `assets/flags/64x48/` | Rectangular pixel flags for roster rows and wider country labels |
 | `supabase/schema.sql` | Tables, RLS, server-only point functions |
 
 ## Launch checklist
@@ -95,12 +101,14 @@ then point `pixelknockout.com` at it.
 - Google OAuth: add the production origin and publish the consent screen.
 - Supabase Auth: add the production Site URL and redirect URL.
 - Supabase SQL: re-run `supabase/schema.sql` after schema edits.
+- Admin settlement: confirm `admin_emails` contains your admin login email before settling real fights.
 - Event bonuses: keep `event_bonus_windows` in `supabase/schema.sql` aligned with `PKO_EVENT.bonusWindows` in `js/data.js`.
 - Demo settlement: keep `ENABLE_DEMO_SETTLEMENT` false in production.
 - Difficulty data: add `ODDS_API_KEY` or proxy the feed through a Supabase Edge Function.
 - Rankings: refresh `PKO_RANKINGS` from UFC.com before/after major cards; use Wikipedia as backup if the official page blocks.
 - Legends: refresh `PKO_LEGENDS` records/facts from official UFC profiles, UFCStats, Sherdog/Tapology, or Wikipedia before using the archive as a public stats reference.
 - Assets: convert fighter art to transparent 128×128 PNG sprites before wiring `img` paths.
+- Flags: keep country flags in both `assets/flags/64x64/` and `assets/flags/64x48/`; display smaller with `image-rendering: pixelated`.
 
 ## Guardrails baked in
 - No "buy points" path anywhere. Points are granted free, equally, every event.
