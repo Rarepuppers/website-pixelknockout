@@ -1,0 +1,1098 @@
+// ===== PKO app: UI + routing =====
+(function () {
+  const CFG = window.PKO_CONFIG;
+  const store = window.PKO.store;
+  const EVENT = window.PKO_EVENT;
+  const EVENT_FALLBACK = window.PKO_EVENTS_FALLBACK || [];
+  const mult = window.PKO_oddsToMultiplier;
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  // sprite if the persona has one (persona.img path), else emoji fallback
+  const avatarHTML = (f, extra = "") => {
+    const inner = f.img ? `<img src="${esc(f.img)}" alt="${esc(f.name)}" />` : (f.emoji || "🥊");
+    return `<div class="avatar ${extra}" style="background:${f.color}">${inner}</div>`;
+  };
+
+  const rankLabel = r => !r ? "UR" : (r.champion ? "C" : (r.interim ? "IC" : `#${r.rank}`));
+  const rankTitle = r => !r ? "Unranked" : `${r.division} ${r.champion ? "Champion" : r.interim ? "Interim Champion" : "rank " + r.rank}${r.p4p ? ` · P4P #${r.p4p}` : ""}`;
+  const rankChip = (r, extra = "") => `<span class="rank-chip ${r?.champion ? "champ" : ""} ${r?.interim ? "interim" : ""} ${!r ? "unranked" : ""} ${extra}" title="${esc(rankTitle(r))}">${esc(rankLabel(r))}</span>`;
+
+  let draft = {}; // boutId -> {pick, stake}
+  let currentPoints = 0;
+  let leaderboardMode = "overall";
+
+  // predictions lock at the card's start time
+  const cardLocked = () => EVENT.lockTime && Date.now() >= new Date(EVENT.lockTime).getTime();
+  const activeBonuses = () => (EVENT.bonusWindows || []).filter(b => {
+    const now = Date.now();
+    return now >= new Date(b.startTime).getTime() && now <= new Date(b.endTime).getTime();
+  });
+
+  // ---------- countdown ----------
+  function fmtCountdown(ms) {
+    const s = Math.floor(ms / 1000), d = Math.floor(s / 86400),
+      h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+  }
+  function renderCountdown() {
+    const el = $("#lock-timer"); if (!el || !EVENT.lockTime) return;
+    const diff = new Date(EVENT.lockTime).getTime() - Date.now();
+    if (diff <= 0) { el.innerHTML = "🔒 Predictions are CLOSED — card in progress"; el.className = "lock-timer closed"; }
+    else { el.innerHTML = `⏳ Predictions lock in <strong>${fmtCountdown(diff)}</strong>`;
+      el.className = "lock-timer" + (diff < 6 * 3600 * 1000 ? " soon" : ""); }
+  }
+
+  // ---------- fighter profile ----------
+  function openFighterProfile(f) {
+    const facts = (f.facts || []).map(x => `<li>${esc(x)}</li>`).join("");
+    const quotes = (f.quotes || []).map(x => `<li>“${esc(x)}”</li>`).join("");
+    const jokes = (f.jokes || []).map(x => `<li>${esc(x)}</li>`).join("");
+    $("#fighter-body").innerHTML = `
+      <div class="profile-head">
+        ${avatarHTML(f, "big")}
+        <div><h1>${esc(f.name)}</h1>
+          <p class="rank-line">${rankChip(f.ranking)} ${f.ranking ? esc(rankTitle(f.ranking)) : "Unranked"}</p>
+          <p class="muted">as ${esc(f.real)} · <span class="flag" title="${esc(f.country || "Parts Unknown")}">${f.flag || "🏴"}</span> ${esc(f.country || "Parts Unknown")}</p>
+          <p class="fighter-tag">${esc(f.tag)}</p></div>
+      </div>
+      <h2 style="margin-top:18px">📋 Real facts</h2>
+      <ul class="facts">${facts}</ul>
+      ${quotes ? `<h2>🎙️ Quote board</h2><ul class="facts quotes">${quotes}</ul>` : ""}
+      <h2>😂 Fun facts <span class="small muted">(parody — totally made up)</span></h2>
+      <ul class="facts fun">${jokes}</ul>`;
+    $("#fighter-modal").classList.remove("hidden");
+  }
+  window.PKO.openFighterProfile = openFighterProfile;
+
+  // ---------- routing ----------
+  function route(name) {
+    $$(".view").forEach(v => v.classList.add("hidden"));
+    const view = $("#view-" + name);
+    if (view) view.classList.remove("hidden");
+    $$(".nav-link[data-route]").forEach(l => l.classList.toggle("active", l.dataset.route === name));
+    if (name === "leaderboard") renderLeaderboard();
+    if (name === "events") renderEvents();
+    if (name === "play") renderPlay();
+    if (name === "profile") renderProfile();
+    if (name === "roster") renderRoster();
+    if (name === "legends") renderLegends();
+    if (name === "admin") renderAdminResults();
+    if (name === "season") {
+      const el = $("#season-current");
+      if (el) el.textContent = CFG.CURRENT_SEASON;
+    }
+  }
+  $$("[data-route]").forEach(l => l.addEventListener("click", e => { e.preventDefault(); route(l.dataset.route); }));
+
+  // ---------- account box ----------
+  function renderAccount() {
+    const box = $("#account-box");
+    if (store.user && store.user.nameChosen) {
+      const mark = store.user.showcaseIcon ? `<span class="showcase-mini" title="${esc(store.user.showcaseTitle || "Showcase item")}">${esc(store.user.showcaseIcon)}</span>` : "👤";
+      box.innerHTML = `<a class="acct-name" href="#profile" id="acct-link">${mark} ${esc(store.user.name)}</a>
+        <button class="btn btn-ghost" id="btn-signout">Sign out</button>`;
+      $("#acct-link").onclick = e => { e.preventDefault(); route("profile"); };
+      $("#btn-signout").onclick = async () => { await store.signOut(); };
+    } else {
+      box.innerHTML = `<button class="btn btn-primary" id="btn-signin">Sign in</button>`;
+      $("#btn-signin").onclick = openAuth;
+    }
+  }
+
+  // ---------- play view ----------
+  function oddsSourceLabel() {
+    if (EVENT.oddsSource === "live") return "card difficulty updated";
+    if (EVENT.oddsSource === "cached") return "card difficulty ready";
+    if (EVENT.oddsSource === "placeholder") return "default card difficulty";
+    return "card difficulty ready";
+  }
+
+  async function renderPlay() {
+    $("#event-title").textContent = EVENT.title;
+    $("#event-date").textContent = EVENT.date + " · Season " + EVENT.season;
+    $("#event-real").textContent = `${EVENT.realTitle} · ${oddsSourceLabel()}`;
+
+    const signed = store.user && store.user.nameChosen;
+    const pts = signed ? await store.getPoints() : CFG.POINTS_SIGNUP;
+    currentPoints = pts;
+    $("#bank-value").textContent = pts;
+    $("#bank-note").textContent = signed ? "+10/day · +1000/event" : "(sign in to save)";
+    await renderBonusPanel(signed);
+
+    const existing = signed ? await store.getPredictions(EVENT.id) : {};
+    const timeLocked = cardLocked();
+    const hasPicks = Object.keys(existing).length > 0;
+    const locked = hasPicks || timeLocked;
+    renderHomeEventHub({ signed, pts, existing, timeLocked, hasPicks, locked });
+    renderHomeQuickGuide();
+
+    const wrap = $("#bouts"); wrap.innerHTML = "";
+    EVENT.bouts.forEach(b => wrap.appendChild(renderBout(b, existing[b.id], locked)));
+    updateStakeSummary(locked);
+    renderNewsletterSignup($("#home-newsletter"), { compact: true });
+    renderHomeFutureEvents();
+    renderHomeFighterShowcase();
+    renderHomeLeaderboardShowcase();
+
+    const submit = $("#submit-picks");
+    submit.textContent = (timeLocked && !hasPicks) ? "PREDICTIONS CLOSED"
+      : (hasPicks ? "PREDICTIONS LOCKED" : "LOCK IN PREDICTIONS");
+    submit.disabled = locked; submit.style.opacity = locked ? .6 : 1;
+    if (timeLocked && !hasPicks && !$("#play-msg").textContent)
+      $("#play-msg").textContent = "⏰ Predictions are closed — the card has started.";
+
+    // dev: resolve fights one at a time so leaderboard moves after each fight.
+    // The "void" button simulates a real fight being scratched (stake refunded).
+    ["#dev-settle", "#dev-void"].forEach(id => { const e = $(id); if (e) e.remove(); });
+    const anyOpen = CFG.ENABLE_DEMO_SETTLEMENT && locked && Object.values(existing).some(p => !p.settled);
+    if (anyOpen) {
+      const resolve = async (opts) => {
+        const r = await store.settleNextBout(EVENT.id, opts);
+        if (r.done) return;
+        let msg;
+        if (r.voided) msg = `⚖️ Bout cancelled — ${r.stake} Glory Points refunded (no win/loss).`;
+        else { const who = r.bout[r.bout.demoWinner].name;
+          msg = r.hit ? `✅ ${who} won — you banked +${r.won} Glory Points!`
+                      : `❌ ${who} won — your pick missed.`; }
+        if (r.finished) {
+          msg += ` 🏁 Card complete!`;
+          if (r.awarded && r.awarded.belt) msg += ` You finished #${r.awarded.rank} and earned the ${r.awarded.belt.icon} ${r.awarded.belt.title} belt — check your Profile!`;
+          else if (r.awarded) msg += ` You finished #${r.awarded.rank}. Belts go to the top 5 — check your Profile for badges.`;
+        }
+        $("#play-msg").textContent = msg;
+        renderPlay();
+        if (!$("#view-leaderboard").classList.contains("hidden")) renderLeaderboard();
+      };
+      const mk = (id, label, opts) => {
+        const b = document.createElement("button");
+        b.id = id; b.className = "btn btn-ghost"; b.style.marginLeft = "10px";
+        b.textContent = label; b.onclick = () => resolve(opts);
+        $(".play-footer").appendChild(b);
+      };
+      mk("dev-settle", "⚙ Resolve next fight (demo)", {});
+      mk("dev-void", "⚖️ Void next fight (demo)", { void: true });
+    }
+
+    // share button once the card is fully settled
+    const oldShare = $("#play-share"); if (oldShare) oldShare.remove();
+    if (signed) {
+      const rec = await store.getEventRecord(EVENT.id);
+      if (rec.finished) {
+        const sh = document.createElement("button");
+        sh.id = "play-share"; sh.className = "btn btn-primary"; sh.style.marginLeft = "10px";
+        sh.textContent = "📣 Share my result";
+        sh.onclick = () => window.PKO.openShare();
+        $(".play-footer").appendChild(sh);
+      }
+    }
+  }
+
+  async function renderBonusPanel(signed) {
+    const panel = $("#bonus-panel");
+    const bonuses = activeBonuses();
+    if (!panel || !bonuses.length) { if (panel) panel.classList.add("hidden"); return; }
+
+    const claims = signed ? await store.getBonusClaims() : {};
+    const available = bonuses.filter(b => !claims[b.id]);
+    if (!available.length) { panel.classList.add("hidden"); return; }
+
+    panel.classList.remove("hidden");
+    panel.innerHTML = `<p class="kicker">LIVE EVENT BONUS</p>
+      <div class="bonus-actions">${available.map(b => `<button class="btn btn-primary bonus-claim" data-bonus="${esc(b.id)}">
+        Claim ${b.amount} pts
+      </button>`).join("")}</div>
+      <p class="muted small">${available.map(b => `${esc(b.label)}: ${esc(b.description)}`).join(" ")}</p>`;
+
+    $$(".bonus-claim", panel).forEach(btn => {
+      btn.onclick = async () => {
+        if (!store.user || !store.user.nameChosen) { openAuth(); return; }
+        const bonus = available.find(b => b.id === btn.dataset.bonus);
+        try {
+          await store.claimEventBonus(bonus);
+          $("#play-msg").textContent = `Claimed +${bonus.amount} Glory Points.`;
+          renderPlay();
+        } catch (e) {
+          $("#play-msg").textContent = "⚠ " + e.message;
+        }
+      };
+    });
+  }
+
+  function eventStatusText(timeLocked, hasPicks) {
+    if (cardLocked()) return "Live now - picks locked";
+    if (hasPicks) return "Predictions locked";
+    return "Open for predictions";
+  }
+
+  function formatStatusTimestamp() {
+    return formatPulledAt(new Date());
+  }
+
+  function renderHomeEventHub(state) {
+    const target = $("#home-event-hub");
+    if (!target) return;
+    const settled = EVENT.bouts.filter(b => b.result).length;
+    const total = EVENT.bouts.length;
+    const nextOpen = EVENT.bouts.find(b => !b.result);
+    target.innerHTML = `<section class="home-panel event-hub">
+      <div>
+        <p class="kicker">${state.timeLocked ? "EVENT LIVE / LOCKED" : "NEXT EVENT"}</p>
+        <h2>${esc(EVENT.shortTitle || EVENT.title)}</h2>
+        <p>${esc(EVENT.realTitle)} · ${esc(eventStatusText(state.timeLocked, state.hasPicks))}</p>
+        <p class="small muted">${esc(EVENT.date)} · ${settled}/${total} fights settled${nextOpen ? ` · Next: ${esc(nextOpen.weight)}` : ""}</p>
+        <p class="small muted">Card status viewed ${esc(formatStatusTimestamp())}</p>
+      </div>
+      <div class="event-hub-actions">
+        <a class="btn btn-primary" href="#bouts">Pick fighters</a>
+        <button class="btn btn-ghost" data-route="leaderboard" data-lb-open="event">Event leaderboard</button>
+      </div>
+    </section>`;
+    const eventBtn = target.querySelector("[data-lb-open]");
+    if (eventBtn) eventBtn.onclick = e => { e.preventDefault(); leaderboardMode = "event"; route("leaderboard"); };
+  }
+
+  function renderHomeQuickGuide() {
+    const target = $("#home-quick-guide");
+    if (!target) return;
+    target.innerHTML = `<section class="home-panel quick-guide">
+      <div>
+        <p class="kicker">HOW PKO WORKS</p>
+        <h2>Pick fighters, track points, chase bragging rights</h2>
+        <p>Choose a pixel fighter for each matchup, commit only the free Glory Points you already have, then follow the event leaderboard as official results are settled.</p>
+      </div>
+      <div class="quick-steps">
+        <span>1. Claim free points</span>
+        <span>2. Lock picks</span>
+        <span>3. Follow results</span>
+      </div>
+      <div class="event-hub-actions">
+        <button class="btn btn-ghost" data-route="rules">Rules</button>
+        <button class="btn btn-ghost" data-route="how">Full guide</button>
+      </div>
+    </section>`;
+    $$("[data-route]", target).forEach(btn => btn.onclick = e => { e.preventDefault(); route(btn.dataset.route); });
+  }
+
+  async function renderHomeFutureEvents() {
+    const target = $("#home-future-events");
+    if (!target) return;
+    const render = (events, source, pulledAt) => {
+      target.innerHTML = `<section class="home-panel">
+        <div class="section-head">
+          <div><p class="kicker">FUTURE EVENTS</p><h2>Next cards</h2></div>
+          <button class="btn btn-ghost" data-route="events">Full events</button>
+        </div>
+        <div class="home-card-grid">
+          ${events.slice(0, 3).map(ev => `<article class="event-card">
+            <p class="event-date">${esc(ev.date)}</p><h2>${esc(ev.event)}</h2>
+            <p>${esc(ev.venue)}</p><p class="muted">${esc(ev.location)}</p>
+          </article>`).join("")}
+        </div>
+        <p class="muted small">${esc(source)} · schedule last pulled ${esc(formatPulledAt(pulledAt || new Date()))}</p>
+        <p class="muted small">Unofficial schedule display. Verify fight cards and start times against UFC.com.</p>
+      </section>`;
+      $$("[data-route]", target).forEach(btn => btn.onclick = e => { e.preventDefault(); route(btn.dataset.route); });
+    };
+    try {
+      const events = await fetchUpcomingEvents();
+      render(events.length ? events : EVENT_FALLBACK, events.length ? "Live schedule" : "Fallback schedule", events.pulledAt);
+    } catch {
+      const cached = getCachedUpcomingEvents(CFG.EVENTS_CACHE_MINUTES || 30, true);
+      render(cached || EVENT_FALLBACK, cached ? "Cached schedule" : "Fallback schedule", cached?.pulledAt || new Date());
+    }
+  }
+
+  function renderHomeFighterShowcase() {
+    const target = $("#home-fighter-showcase");
+    if (!target) return;
+    const fighters = EVENT.bouts.flatMap(b => [b.a, b.b]).slice(0, 6);
+    target.innerHTML = `<section class="home-panel">
+      <div class="section-head">
+        <div><p class="kicker">PIXEL FIGHTERS</p><h2>Tonight's roster</h2></div>
+        <button class="btn btn-ghost" data-route="roster">Full roster</button>
+      </div>
+      <div class="fighter-showcase-grid">
+        ${fighters.map(f => `<button class="fighter-mini" data-real="${esc(f.real)}">
+          ${avatarHTML(f)}
+          <strong>${esc(f.name)}</strong>
+          <span>as ${esc(f.real)}</span>
+        </button>`).join("")}
+      </div>
+    </section>`;
+    $$(".fighter-mini", target).forEach(btn => btn.onclick = () => {
+      const fighter = fighters.find(f => f.real === btn.dataset.real);
+      if (fighter) openFighterProfile(fighter);
+    });
+    $$("[data-route]", target).forEach(btn => btn.onclick = e => { e.preventDefault(); route(btn.dataset.route); });
+  }
+
+  async function renderHomeLeaderboardShowcase() {
+    const target = $("#home-leaderboard-showcase");
+    if (!target) return;
+    const [overall, eventRows] = await Promise.all([store.getLeaderboard(), store.getEventLeaderboard(EVENT.id)]);
+    const row = (r, value) => `<li><span>${esc(r.name)}</span><strong>${value}</strong></li>`;
+    target.innerHTML = `<section class="home-panel">
+      <div class="section-head">
+        <div><p class="kicker">BRAGGING RIGHTS</p><h2>Leaderboard watch</h2></div>
+        <button class="btn btn-ghost" data-route="leaderboard">All leaders</button>
+      </div>
+      <div class="leader-preview-grid">
+        <div><h3>Overall</h3><ol>${overall.slice(0, 5).map(r => row(r, `${r.points} pts`)).join("")}</ol></div>
+        <div><h3>${esc(EVENT.shortTitle)} event</h3><ol>${eventRows.slice(0, 5).map(r => row(r, `${r.eventPoints >= 0 ? "+" : ""}${r.eventPoints} pts`)).join("")}</ol></div>
+      </div>
+    </section>`;
+    $$("[data-route]", target).forEach(btn => btn.onclick = e => { e.preventDefault(); route(btn.dataset.route); });
+  }
+
+  function renderBout(b, pred, locked) {
+    const el = document.createElement("div");
+    el.className = "bout";
+    el.innerHTML = `<div class="bout-weight">${b.weight}</div>
+      <div class="matchup">${fighterCard(b.a, "a", b.oddsA, pred, locked)}
+        <div class="vs">VS</div>
+        ${fighterCard(b.b, "b", b.oddsB, pred, locked)}</div>
+      ${boutOutcomeHTML(b, locked, pred)}`;
+
+    if (!locked) {
+      const stake = Math.min((draft[b.id] && draft[b.id].stake) || Math.min(100, currentPoints), currentPoints);
+      draft[b.id] = Object.assign({ pick: null }, draft[b.id], { stake });
+      const row = document.createElement("div");
+      row.className = "stake-row";
+      row.innerHTML = `<span class="small muted">Points:</span>
+        <input type="range" min="0" max="${currentPoints}" step="10" value="${stake}" />
+        <span class="stake-val">${stake} pts</span>
+        <div class="stake-terms" aria-live="polite"></div>`;
+      const slider = row.querySelector("input"), val = row.querySelector(".stake-val");
+      slider.oninput = () => {
+        draft[b.id] = Object.assign({ pick: null }, draft[b.id], { stake: +slider.value });
+        clampDraftStakes(b.id);
+        val.textContent = draft[b.id].stake + " pts";
+        slider.value = draft[b.id].stake;
+        updateStakeTerms(el, b);
+        updateStakeSummary(false);
+      };
+      el.appendChild(row);
+      $$(".fighter", el).forEach(f => f.onclick = () => {
+        $$(".fighter", el).forEach(x => x.classList.remove("picked"));
+        f.classList.add("picked");
+        draft[b.id] = Object.assign({ stake: Math.min(100, currentPoints) }, draft[b.id], { pick: f.dataset.side });
+        clampDraftStakes(b.id);
+        val.textContent = draft[b.id].stake + " pts";
+        slider.value = draft[b.id].stake;
+        updateStakeTerms(el, b);
+        updateStakeSummary(false);
+      });
+      updateStakeTerms(el, b);
+    } else if (pred) {
+      const who = b[pred.pick].name;
+      const r = document.createElement("div"); r.className = "bout-result";
+      if (pred.voided) { r.className += " void";
+        r.innerHTML = `⚖️ Bout cancelled — <strong>${pred.stake} pts refunded</strong> (no win/loss)`; }
+      else if (pred.settled) r.innerHTML = pred.won > 0
+        ? `✅ <span style="color:var(--green)">${esc(who)}</span> won — +${pred.won} pts`
+        : `❌ ${esc(who)} lost — ${pred.stake} pts gone`;
+      else r.innerHTML = `🔒 Predicted <strong>${esc(who)}</strong> · ${pred.stake} pts · multiplier ${pred.multiplier.toFixed(2)}x`;
+      el.appendChild(r);
+    }
+    // info buttons open the fighter profile (works locked or not)
+    $$(".fighter-info", el).forEach(btn => btn.onclick = (e) => {
+      e.stopPropagation(); openFighterProfile(b[btn.dataset.side]);
+    });
+    return el;
+  }
+
+  function fighterCard(f, side, odds, pred, locked) {
+    const m = mult(odds).toFixed(2);
+    let cls = "fighter";
+    if (pred && pred.pick === side) cls += " picked";
+    if (pred && pred.settled) cls += (pred.pick === side && pred.won > 0) ? " win" : (pred.pick === side ? " lose" : "");
+    const oddsStr = (odds > 0 ? "+" : "") + odds;
+    return `<div class="${cls}" data-side="${side}" ${locked ? 'style="cursor:default"' : ""}>
+      <button class="fighter-info" data-side="${side}" title="View ${esc(f.name)}'s profile">ℹ︎</button>
+      ${avatarHTML(f)}
+      <div class="fighter-rankline">${f.ranking ? rankChip(f.ranking) + " " + esc(rankTitle(f.ranking)) : "UR · unranked"}</div>
+      <div class="fighter-name"><span class="flag" title="${esc(f.country || "Parts Unknown")}">${f.flag || "🏴"}</span> ${esc(f.name)}</div>
+      <div class="fighter-real">as ${esc(f.real)}</div>
+      <div class="fighter-tag">${esc(f.tag)}</div>
+      <div class="fighter-odds">difficulty ${oddsStr}</div>
+      <div class="fighter-mult">multiplier ${m}x</div>
+    </div>`;
+  }
+
+  function outcomeMethod(b) {
+    return b.winType || b.method || "";
+  }
+
+  function boutOutcomeHTML(b, locked, pred) {
+    const result = b.result || (pred && pred.result);
+    let cls = "pending", label = "Fight not yet started";
+    if (result === "void" || b.voided || pred?.voided) {
+      cls = "void"; label = "Fight cancelled";
+    } else if (result === "draw") {
+      cls = "draw"; label = "Draw";
+    } else if (result === "a" || result === "b") {
+      const method = outcomeMethod(b);
+      cls = "final";
+      label = `Winner: ${b[result].name}${method ? ` (${method})` : ""}`;
+    } else if (locked) {
+      cls = "locked"; label = "In progress - predictions locked";
+    }
+    return `<div class="bout-outcome ${cls}"><span>Outcome</span><strong>${esc(label)}</strong></div>`;
+  }
+
+  function committedPoints() {
+    return EVENT.bouts.reduce((sum, b) => {
+      const d = draft[b.id];
+      return sum + (d && d.pick ? d.stake : 0);
+    }, 0);
+  }
+
+  function clampDraftStakes(activeBoutId) {
+    const active = draft[activeBoutId];
+    if (!active) return;
+    const otherCommitted = EVENT.bouts.reduce((sum, b) => {
+      const d = draft[b.id];
+      return sum + (b.id !== activeBoutId && d && d.pick ? d.stake : 0);
+    }, 0);
+    const maxForActive = Math.max(0, currentPoints - otherCommitted);
+    active.stake = Math.min(active.stake || 0, maxForActive);
+
+    $$(".bout").forEach((el, i) => {
+      const bout = EVENT.bouts[i];
+      const d = draft[bout.id] || {};
+      const other = committedPoints() - (d.pick ? (d.stake || 0) : 0);
+      const max = Math.max(0, currentPoints - other);
+      const slider = el.querySelector("input[type=range]");
+      const val = el.querySelector(".stake-val");
+      if (!slider) return;
+      slider.max = max;
+      if ((d.stake || 0) > max) d.stake = max;
+      slider.value = d.stake || 0;
+      if (val) val.textContent = (d.stake || 0) + " pts";
+      updateStakeTerms(el, bout);
+    });
+  }
+
+  function updateStakeTerms(el, b) {
+    const terms = el.querySelector(".stake-terms");
+    if (!terms) return;
+    const d = draft[b.id] || {};
+    if (!d.pick || !d.stake) {
+      terms.innerHTML = `<span class="stake-term-label">Pick a side</span><strong>0 pts</strong><span>cost / payout</span>`;
+      return;
+    }
+    const odds = d.pick === "a" ? b.oddsA : b.oddsB;
+    const payout = Math.floor(d.stake * mult(odds));
+    const pct = currentPoints ? Math.round((d.stake / currentPoints) * 100) : 0;
+    terms.innerHTML = `<span class="stake-term-label">Cost / payout</span><strong>${d.stake} / ${payout} pts</strong><span>${pct}% of points · ${mult(odds).toFixed(2)}x</span>`;
+  }
+
+  function updateStakeSummary(locked) {
+    const box = $("#stake-summary");
+    if (!box) return;
+    if (locked) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+    const committed = committedPoints();
+    const remaining = Math.max(0, currentPoints - committed);
+    const pct = currentPoints ? Math.round((committed / currentPoints) * 100) : 0;
+    box.classList.remove("hidden");
+    box.innerHTML = `<div><span class="bank-label">COMMITTED</span><strong>${committed} pts</strong></div>
+      <div><span class="bank-label">REMAINING</span><strong>${remaining} pts</strong></div>
+      <div><span class="bank-label">CARD RISK</span><strong>${pct}%</strong></div>`;
+  }
+
+  $("#submit-picks").onclick = async () => {
+    if (!store.user || !store.user.nameChosen) { openAuth(); return; }
+    const picks = [];
+    for (const b of EVENT.bouts) {
+      const d = draft[b.id];
+      if (d && d.pick && d.stake > 0) {
+        const odds = d.pick === "a" ? b.oddsA : b.oddsB;
+        picks.push({ boutId: b.id, pick: d.pick, stake: d.stake, multiplier: +mult(odds).toFixed(4) });
+      }
+    }
+    if (!picks.length) { $("#play-msg").textContent = "Pick at least one winner and set points."; return; }
+    try { await store.submitPicks(EVENT.id, picks);
+      $("#play-msg").textContent = "Locked in! Difficulty multipliers are frozen on your picks. Good luck 🥊";
+      draft = {}; renderPlay();
+    } catch (e) { $("#play-msg").textContent = "⚠ " + e.message; }
+  };
+
+  // ---------- leaderboard ----------
+  async function renderLeaderboard() {
+    $("#season-year").textContent = CFG.CURRENT_SEASON;
+    $$(".leaderboard-tabs [data-lb]").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.lb === leaderboardMode);
+      btn.onclick = () => { leaderboardMode = btn.dataset.lb; renderLeaderboard(); };
+    });
+    const rows = leaderboardMode === "event" ? await store.getEventLeaderboard(EVENT.id) : await store.getLeaderboard();
+    const list = $("#leaderboard-list"); list.innerHTML = "";
+    const note = $("#leaderboard-note");
+    if (!rows.length) {
+      list.innerHTML = `<li class="empty-state">No leaderboard entries yet. Sign in, choose a fighter name, and lock predictions for the current card.</li>`;
+      if (note) note.textContent = "";
+      return;
+    }
+    if (note) note.textContent = leaderboardMode === "event"
+      ? `${EVENT.shortTitle} event leaderboard. Updates after each settled fight. Event points are returned points minus committed points for this card. Viewed ${formatStatusTimestamp()}.`
+      : `Overall leaderboard ranks total season Glory Points after grants, predictions, refunds, and settled outcomes. Viewed ${formatStatusTimestamp()}.`;
+    rows.slice(0, 100).forEach((r, i) => {
+      const rank = i + 1, belt = store.BELTS[rank];
+      const li = document.createElement("li");
+      li.className = "lb-row" + (r.me ? " me" : "") + (rank <= 5 ? " top5" : "");
+      li.innerHTML = leaderboardMode === "event" ? eventLeaderboardRow(r, rank) : overallLeaderboardRow(r, rank, belt);
+      list.appendChild(li);
+    });
+  }
+
+  function overallLeaderboardRow(r, rank, belt) {
+    return `<span class="lb-rank">#${rank}</span>
+      <span class="lb-belt">${belt ? belt.icon : ""}</span>
+      <span class="lb-showcase" title="${esc(r.showcaseTitle || "No shrine item selected")}">${r.showcaseIcon ? esc(r.showcaseIcon) : ""}</span>
+      <span class="lb-name">${esc(r.name)}${belt ? `<span class="lb-title">${belt.title}</span>` : ""}</span>
+      <span class="lb-pts">${r.points} pts</span>`;
+  }
+
+  function eventLeaderboardRow(r, rank) {
+    return `<span class="lb-rank">#${rank}</span>
+      <span class="lb-belt">${rank <= 5 ? "PKO" : ""}</span>
+      <span class="lb-name">${esc(r.name)}</span>
+      <span class="lb-event-stats">${r.hits}-${r.misses}${r.voided ? ` | ${r.voided} void` : ""} | ${r.settled}/${r.total} settled</span>
+      <span class="lb-pts">${r.eventPoints >= 0 ? "+" : ""}${r.eventPoints} pts</span>`;
+  }
+
+  // ---------- future events ----------
+  const UPCOMING_EVENT_LIMIT = 2;
+  const EVENTS_CACHE_KEY = "pko_upcoming_events_cache_v1";
+
+  function parseEventDate(dateText) {
+    const t = Date.parse(dateText);
+    return Number.isFinite(t) ? new Date(t) : null;
+  }
+
+  function cleanWikiText(s) {
+    return String(s || "")
+      .replace(/\[[^\]]+\]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function formatPulledAt(date = new Date()) {
+    return date.toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    });
+  }
+
+  function findScheduledEventsTable(doc) {
+    const heading = doc.querySelector("#Scheduled_events");
+    let node = heading ? heading.closest("h2") : null;
+    while (node && node.nextElementSibling) {
+      node = node.nextElementSibling;
+      if (node.matches && node.matches("table")) return node;
+      const table = node.querySelector && node.querySelector("table");
+      if (table) return table;
+    }
+    return doc.querySelector("table.wikitable");
+  }
+
+  function getCachedUpcomingEvents(maxAgeMinutes = CFG.EVENTS_CACHE_MINUTES || 30, allowStale = false) {
+    try {
+      const cached = JSON.parse(localStorage.getItem(EVENTS_CACHE_KEY));
+      if (!cached || !Array.isArray(cached.events) || !cached.pulledAt) return null;
+      const ageMs = Date.now() - cached.pulledAt;
+      if (!allowStale && ageMs > maxAgeMinutes * 60 * 1000) return null;
+      const events = cached.events.map(ev => ({ ...ev, parsed: ev.parsed ? new Date(ev.parsed) : null }));
+      events.pulledAt = new Date(cached.pulledAt);
+      events.stale = ageMs > maxAgeMinutes * 60 * 1000;
+      return events;
+    } catch {
+      return null;
+    }
+  }
+
+  function setCachedUpcomingEvents(events) {
+    try {
+      localStorage.setItem(EVENTS_CACHE_KEY, JSON.stringify({
+        pulledAt: Date.now(),
+        events: events.map(ev => ({
+          event: ev.event,
+          date: ev.date,
+          venue: ev.venue,
+          location: ev.location,
+          parsed: ev.parsed ? ev.parsed.toISOString() : null,
+        })),
+      }));
+    } catch {}
+  }
+
+  async function fetchUpcomingEvents() {
+    const cached = getCachedUpcomingEvents();
+    if (cached) return cached;
+
+    const url = "https://en.wikipedia.org/w/api.php?action=parse&page=List_of_UFC_events&prop=text&format=json&origin=*";
+    const data = await (await fetch(url)).json();
+    const html = data && data.parse && data.parse.text && data.parse.text["*"];
+    if (!html) throw new Error("Wikipedia response did not include page HTML.");
+
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const table = findScheduledEventsTable(doc);
+    if (!table) throw new Error("Scheduled events table was not found.");
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const events = [...table.querySelectorAll("tr")].slice(1).map(row => {
+      const cells = [...row.querySelectorAll("td")].map(cell => cleanWikiText(cell.textContent));
+      if (cells.length < 4) return null;
+      const parsed = parseEventDate(cells[1]);
+      if (!parsed || parsed < today) return null;
+      return { event: cells[0], date: cells[1], venue: cells[2], location: cells[3], parsed };
+    }).filter(Boolean).sort((a, b) => a.parsed - b.parsed).slice(0, UPCOMING_EVENT_LIMIT);
+
+    events.pulledAt = new Date();
+    setCachedUpcomingEvents(events);
+    return events;
+  }
+
+  function renderEventCards(events, source, pulledAt = new Date()) {
+    const list = $("#events-list");
+    list.innerHTML = "";
+    const pulled = formatPulledAt(pulledAt);
+    if (!events.length) {
+      list.innerHTML = `<div class="empty-state">No upcoming events are available right now. Check UFC.com or try again later.</div>`;
+      $("#events-source").innerHTML = `${esc(source)} · <a href="https://www.ufc.com/events" target="_blank" rel="noopener">UFC.com backup</a>`;
+      return;
+    }
+    events.forEach(ev => {
+      const card = document.createElement("article");
+      card.className = "event-card";
+      card.innerHTML = `<p class="event-date">${esc(ev.date)}</p>
+        <h2>${esc(ev.event)}</h2>
+        <p>${esc(ev.venue)}</p>
+        <p class="muted">${esc(ev.location)}</p>`;
+      list.appendChild(card);
+    });
+    $("#events-source").innerHTML = `${esc(source)} · schedule last pulled ${esc(pulled)} · <a href="https://en.wikipedia.org/wiki/List_of_UFC_events" target="_blank" rel="noopener">Wikipedia schedule</a> · <a href="https://www.ufc.com/events" target="_blank" rel="noopener">UFC.com backup</a>`;
+  }
+
+  async function renderEvents() {
+    renderEventCards(EVENT_FALLBACK.slice(0, UPCOMING_EVENT_LIMIT), `Loading live schedule | Event details last pulled ${formatPulledAt()}`);
+    try {
+      const events = await fetchUpcomingEvents();
+      const source = events.length
+        ? (events.stale ? "Cached schedule; verify against UFC.com" : "Live schedule")
+        : "Fallback schedule; verify against UFC.com";
+      renderEventCards(
+        events.length ? events : EVENT_FALLBACK.slice(0, UPCOMING_EVENT_LIMIT),
+        `${source} | Event details last pulled ${formatPulledAt(events.pulledAt || new Date())}`
+      );
+    } catch {
+      const stale = getCachedUpcomingEvents(CFG.EVENTS_CACHE_MINUTES || 30, true);
+      renderEventCards(
+        stale || EVENT_FALLBACK.slice(0, UPCOMING_EVENT_LIMIT),
+        `${stale ? "Cached schedule; verify against UFC.com" : "Fallback schedule; verify against UFC.com"} | Event details last pulled ${formatPulledAt(stale?.pulledAt || new Date())}`
+      );
+    }
+  }
+
+  // ---------- roster ----------
+  function divisionLabel(raw) {
+    return String(raw || "Featured").replace(/^Women's /, "Women’s ");
+  }
+
+  function renderRoster() {
+    const body = $("#roster-body");
+    const rows = (window.PKO_allRosterFighters ? window.PKO_allRosterFighters() : []);
+    if (!rows.length) {
+      body.innerHTML = `<div class="empty-state">No roster entries yet.</div>`;
+      return;
+    }
+
+    const groups = new Map();
+    rows.forEach(r => {
+      const key = divisionLabel(r.division);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(r);
+    });
+
+    body.innerHTML = [...groups.entries()].map(([division, fighters]) => `
+      <section class="roster-division">
+        <h2>${esc(division)}</h2>
+        <div class="roster-table">
+          <div class="roster-row roster-head">
+            <span>Sprite</span><span>Rank</span><span>Real fighter</span><span>Pixel fighter</span><span>Country</span><span>Persona note</span>
+          </div>
+          ${fighters.map(f => `<div class="roster-row">
+            <span class="roster-sprite"><img src="${esc(f.img || "assets/fighters/placeholder-pixel-fighter.svg")}" alt="${esc(f.pixelName)} placeholder sprite" loading="lazy" /></span>
+            <span class="roster-rank">${rankChip(f.ranking)} ${f.ranking ? `<span>${esc(f.ranking.division)}${f.ranking.p4p ? ` · P4P #${esc(f.ranking.p4p)}` : ""}</span>` : `<span>Unranked</span>`}</span>
+            <span>${esc(f.name)}</span>
+            <span class="pixel-name">${esc(f.pixelName)}</span>
+            <span>${esc(f.flag || "")} ${esc(f.country || "Parts Unknown")}</span>
+            <span>${esc(f.pixelTag || "")}</span>
+          </div>`).join("")}
+        </div>
+      </section>
+    `).join("");
+  }
+
+  function renderLegends() {
+    const body = $("#legends-body");
+    const legends = window.PKO_LEGENDS || [];
+    if (!legends.length) {
+      body.innerHTML = `<div class="empty-state">No legends have been added yet.</div>`;
+      return;
+    }
+    body.innerHTML = legends.map(l => `
+      <article class="legend-card">
+        <div class="legend-top">
+          <span class="legend-avatar">${esc((l.pixelName || l.name).slice(0, 1))}</span>
+          <div>
+            <h2>${esc(l.name)}</h2>
+            <p class="pixel-name">${esc(l.pixelName)}</p>
+            <p class="small muted">${esc(l.country)} · ${esc(l.divisions)} · ${esc(l.status)}</p>
+          </div>
+        </div>
+        <div class="legend-record">${esc(l.record)}</div>
+        <div class="legend-badges">${(l.badges || []).map(b => `<span>${esc(b)}</span>`).join("")}</div>
+        ${l.quote ? `<blockquote>${esc(l.quote)}</blockquote>` : ""}
+        <ul class="facts">${(l.facts || []).map(f => `<li>${esc(f)}</li>`).join("")}</ul>
+        <p class="legend-fun">${esc(l.fun || "")}</p>
+      </article>
+    `).join("");
+  }
+
+  function renderAdminResults() {
+    const body = $("#admin-results-body");
+    if (!body) return;
+    const email = store.user && store.user.email;
+    const admins = CFG.ADMIN_EMAILS || [];
+    const allowed = !!email && admins.map(x => String(x).toLowerCase()).includes(String(email).toLowerCase());
+    if (!allowed) {
+      body.innerHTML = `<div class="empty-state">Admin result tools are locked. Sign in with an approved admin email when the server-side settlement function is ready.</div>
+        <div class="source-panel">
+          <p><strong>Launch note:</strong> This public page is only a placeholder. Real result settlement must run through Supabase RLS, an Edge Function, or another server-side admin path.</p>
+          <p class="small muted">Current admin target: enter official fight outcomes, mark cancelled bouts as void, write point history, and refresh event leaderboards after each fight.</p>
+        </div>`;
+      return;
+    }
+    const open = EVENT.bouts.filter(b => !b.result).length;
+    body.innerHTML = `<div class="source-panel">
+      <p><strong>${esc(EVENT.shortTitle || EVENT.title)}</strong></p>
+      <p class="small muted">${EVENT.bouts.length - open}/${EVENT.bouts.length} fights have local outcomes. Last viewed ${esc(formatStatusTimestamp())}.</p>
+    </div>
+    <div class="rules-grid admin-checklist">
+      <div class="rule-block"><h2>1. Confirm official result</h2><p>Use official post-fight sources before entering winner, win type, round, and cancelled/void status.</p></div>
+      <div class="rule-block"><h2>2. Settle one fight</h2><p>Server function should refund voids, credit correct picks, leave missed picks at zero return, and write point history.</p></div>
+      <div class="rule-block"><h2>3. Refresh leaderboard</h2><p>Event leaderboard should move after every settled fight; overall leaderboard changes when points are returned.</p></div>
+      <div class="rule-block"><h2>4. Award final badges</h2><p>When the full card is final, award virtual badges, belts, and shrine items with zero monetary value.</p></div>
+    </div>`;
+  }
+
+  // ---------- profile ----------
+  async function renderProfile() {
+    const body = $("#profile-body");
+    if (!store.user || !store.user.nameChosen) {
+      body.innerHTML = `<h1>Profile</h1><div class="empty-state">Sign in to claim your fighter name, track Glory Points, view point history, and build a shrine of virtual badges and belts.</div>
+        <button class="btn btn-primary" id="p-signin">Sign in</button>`;
+      $("#p-signin").onclick = openAuth; return;
+    }
+    const pts = await store.getPoints();
+    const rows = await store.getLeaderboard();
+    const rank = rows.findIndex(r => r.me) + 1;
+    const shrineItems = await store.getShrineItems();
+    const history = await store.getPointHistory(30);
+    const shelf = renderShrineItems(shrineItems);
+    const showcase = store.user.showcaseIcon
+      ? `<div class="showcase-big" title="${esc(store.user.showcaseTitle || "Showcase item")}">${esc(store.user.showcaseIcon)}</div>`
+      : `<div class="showcase-big empty">?</div>`;
+    body.innerHTML = `
+      <div class="profile-head">
+        <div class="avatar big" style="background:var(--panel2)">👤</div>${showcase}
+        <div><h1>${esc(store.user.name)}</h1>
+          <p class="muted">Season ${CFG.CURRENT_SEASON} · Rank ${rank > 0 ? "#" + rank : "—"}</p></div>
+        <div class="bank"><span class="bank-label">GLORY POINTS</span>
+          <span class="bank-value">${pts}</span><span class="bank-note">resets Jan 1</span></div>
+      </div>
+      <h2 style="margin-top:24px">Shrine <span class="small muted">(virtual · zero value · cannot be bought or sold)</span></h2>
+      <div class="shelf">${shelf}</div>
+      <h2 style="margin-top:24px">Point History</h2>
+      <div class="point-history">${renderPointHistory(history)}</div>
+      <div style="margin-top:18px"><button class="btn btn-primary" id="prof-share">📣 Share my result</button></div>`;
+    $$(".trophy-select", body).forEach(btn => {
+      btn.onclick = async () => {
+        try {
+          await store.setShowcaseItem(btn.dataset.item);
+          renderAccount();
+          renderProfile();
+        } catch (e) {
+          $("#play-msg").textContent = "⚠ " + e.message;
+        }
+      };
+    });
+    $("#prof-share").onclick = () => window.PKO.openShare();
+    const newsletter = document.createElement("div");
+    newsletter.id = "profile-newsletter";
+    body.appendChild(newsletter);
+    renderNewsletterSignup(newsletter);
+  }
+
+  function renderShrineItems(items) {
+    if (!items.length) return `<div class="empty-state">No shrine items yet. Play a card to earn participation badges, event-placement badges, and virtual belts.</div>`;
+    return items.map(t => {
+      const picked = store.user && store.user.showcaseItemId === t.id;
+      return `<div class="trophy ${esc(t.kind)} ${picked ? "selected" : ""}">
+        <div class="trophy-ico">${esc(t.icon)}</div>
+        <div class="trophy-title">${esc(t.title)}</div>
+        <div class="trophy-sub">${esc(t.sub || "")}</div>
+        <div class="trophy-season">Season ${esc(t.season || CFG.CURRENT_SEASON)}</div>
+        <button class="btn btn-ghost trophy-select" data-item="${esc(t.id)}">${picked ? "Displayed" : "Display"}</button>
+      </div>`;
+    }).join("");
+  }
+
+  function renderPointHistory(history) {
+    if (!history.length) return `<div class="empty-state">No point history yet. Signup grants, event grants, prediction stakes, refunds, wins, and live bonuses will appear here.</div>`;
+    return history.map(h => {
+      const amount = Number(h.amount) || 0;
+      const sign = amount > 0 ? "+" : "";
+      const cls = amount > 0 ? "gain" : amount < 0 ? "loss" : "neutral";
+      const when = h.createdAt ? new Date(h.createdAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "";
+      return `<div class="history-row">
+        <span class="history-main"><strong>${esc(h.label || h.type || "Point update")}</strong><span>${esc(when)}</span></span>
+        <span class="history-amount ${cls}">${sign}${amount}</span>
+        <span class="history-balance">${Number(h.balance || 0)} pts</span>
+      </div>`;
+    }).join("");
+  }
+
+  function renderNewsletterSignup(target, opts = {}) {
+    if (!target) return;
+    const formUrl = CFG.BREVO_FORM_URL;
+    if (!formUrl) { target.innerHTML = ""; return; }
+    const hours = CFG.MAJOR_EVENT_EMAIL_HOURS_BEFORE || 5;
+    const compact = opts.compact ? " compact" : "";
+    target.innerHTML = `
+      <section class="newsletter-panel${compact}">
+        <div>
+          <p class="kicker">MAJOR EVENT ALERTS</p>
+          <h2>Get the big-card reminder</h2>
+          <p>Sign up for major-event emails only. PKO sends the reminder about ${hours} hours before a major card so you can lock picks before the first bell.</p>
+          <form class="newsletter-form" method="POST" action="${esc(formUrl)}" data-type="subscription" novalidate>
+            <div class="newsletter-fields">
+              <label class="sr-only">Email address</label>
+              <input class="newsletter-email" type="email" name="EMAIL" autocomplete="email" placeholder="you@example.com" required />
+              <button class="btn btn-primary" type="submit">Sign up for alerts</button>
+            </div>
+            <label class="newsletter-consent">
+              <input type="checkbox" name="GDPR_CONSENT" value="1" required />
+              <span>I agree to receive major-event emails and accept the <a href="privacy.html">privacy policy</a>. Unsubscribe anytime.</span>
+            </label>
+            <label class="newsletter-error"></label>
+            <p class="newsletter-success">You're almost in. Check your inbox to confirm your spot on the roster.</p>
+            <input type="text" name="email_address_check" value="" class="input--hidden" tabindex="-1" autocomplete="off" />
+            <input type="hidden" name="locale" value="en" />
+          </form>
+          <p class="small muted">No point purchases, no paid picks, no spam.</p>
+        </div>
+        <div class="newsletter-qr">
+          <img src="assets/pixelknockout_signup_QR-Code.png" alt="QR code for Pixel Knockout major event email signup" loading="lazy" />
+          <span class="small muted">Scan to join</span>
+        </div>
+      </section>`;
+    bindNewsletterForms(target);
+  }
+
+  function bindNewsletterForms(root = document) {
+    $$(".newsletter-form", root).forEach(form => {
+      if (form.dataset.bound) return;
+      form.dataset.bound = "true";
+      const email = $(".newsletter-email", form);
+      const consent = $("input[name='GDPR_CONSENT']", form);
+      const error = $(".newsletter-error", form);
+      const success = $(".newsletter-success", form);
+      const button = $("button[type='submit']", form);
+      const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const setError = msg => {
+        if (!error) return;
+        error.textContent = msg || "";
+        error.style.display = msg ? "block" : "none";
+      };
+      const setSuccess = on => { if (success) success.style.display = on ? "block" : "none"; };
+      form.addEventListener("submit", ev => {
+        ev.preventDefault();
+        setError(""); setSuccess(false);
+        const val = (email && email.value || "").trim();
+        if (!val) { setError("Enter your email address first."); email && email.focus(); return; }
+        if (!emailRe.test(val)) { setError("That email format looks wrong. Check it and try again."); email && email.focus(); return; }
+        if (!consent || !consent.checked) { setError("Tick the consent box to join the major-event alerts."); consent && consent.focus(); return; }
+
+        const data = new FormData(form);
+        const xhr = new XMLHttpRequest();
+        if (button) { button.disabled = true; button.textContent = "Sending..."; }
+        xhr.addEventListener("load", () => {
+          let res = null; try { res = JSON.parse(xhr.response); } catch {}
+          if (xhr.status >= 200 && xhr.status < 300 && !(res && res.errors)) {
+            form.reset();
+            setSuccess(true);
+          } else {
+            setError((res && (res.message || res.errors)) || "Signup did not go through. Try again in a moment.");
+          }
+          if (button) { button.disabled = false; button.textContent = "Sign up for alerts"; }
+        });
+        xhr.addEventListener("error", () => {
+          setError("Network error reaching Brevo. Try again in a moment.");
+          if (button) { button.disabled = false; button.textContent = "Sign up for alerts"; }
+        });
+        xhr.open("POST", form.getAttribute("action") + "?isAjax=1");
+        xhr.send(data);
+      });
+    });
+  }
+
+  // ---------- username modal ----------
+  function openNameModal() {
+    $("#name-modal").classList.remove("hidden");
+    $("#name-input").value = "";
+    setTimeout(() => $("#name-input").focus(), 50);
+  }
+  function closeNameModal() { $("#name-modal").classList.add("hidden"); $("#name-msg").textContent = ""; }
+  $("#btn-savename").onclick = saveName;
+  $("#name-input").addEventListener("keydown", e => { if (e.key === "Enter") saveName(); });
+  async function saveName() {
+    try { await store.setUsername($("#name-input").value);
+      closeNameModal(); $("#play-msg").textContent = `Welcome, ${store.user.name}! +${CFG.POINTS_SIGNUP} signup Glory Points granted.`;
+    } catch (e) { $("#name-msg").textContent = "⚠ " + e.message; }
+  }
+
+  // ---------- auth modal ----------
+  function openAuth() {
+    $("#auth-modal").classList.remove("hidden");
+    $("#auth-mode-note").textContent = store.mode === "local"
+      ? "Dev mode: no Supabase configured — sign-in is simulated locally."
+      : "Secured by Supabase Auth.";
+  }
+  function closeAuth() { $("#auth-modal").classList.add("hidden"); $("#auth-msg").textContent = ""; }
+  $("#auth-close").onclick = closeAuth;
+  $("#auth-modal").addEventListener("click", e => { if (e.target.id === "auth-modal") closeAuth(); });
+  $("#btn-google").onclick = async () => {
+    try { await store.signInGoogle(); if (store.mode === "local") closeAuth(); }
+    catch (e) { $("#auth-msg").textContent = "⚠ " + e.message; }
+  };
+  $("#btn-email").onclick = async () => {
+    try { const r = await store.signInEmail($("#email-input").value.trim());
+      if (r && r.instant) closeAuth(); else $("#auth-msg").textContent = "✉ Magic link sent — check your email.";
+    } catch (e) { $("#auth-msg").textContent = "⚠ " + e.message; }
+  };
+
+  // ---------- share card ----------
+  const SITE = "pixelknockout.com";
+  async function buildShareData() {
+    const rec = await store.getEventRecord(EVENT.id);
+    const rows = await store.getLeaderboard();
+    const rank = rows.findIndex(r => r.me) + 1;
+    const pts = await store.getPoints();
+    return { rec, rank, pts, name: store.user ? store.user.name : "Fighter" };
+  }
+
+  function drawShareCard(d) {
+    const c = $("#share-canvas"), x = c.getContext("2d");
+    const W = c.width, H = c.height;
+    // background
+    const g = x.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, "#1d1745"); g.addColorStop(1, "#0d0b1f");
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    x.strokeStyle = "#ffd34d"; x.lineWidth = 6; x.strokeRect(8, 8, W - 16, H - 16);
+    x.textAlign = "left";
+    // logo
+    x.fillStyle = "#ffd34d"; x.font = "32px 'Press Start 2P', monospace";
+    x.fillText("PKO", 34, 60);
+    x.fillStyle = "#9a93c9"; x.font = "12px 'Press Start 2P', monospace";
+    x.fillText("PIXEL KNOCKOUT", 120, 56);
+    // record line
+    const ratio = d.rec.total ? `${d.rec.hits}/${d.rec.total}` : "—";
+    x.fillStyle = "#f5f3ff"; x.font = "20px 'Press Start 2P', monospace";
+    x.fillText(`I went ${ratio}`, 34, 130);
+    x.fillStyle = "#4dffa3"; x.font = "16px 'Press Start 2P', monospace";
+    x.fillText(`at ${EVENT.shortTitle}`, 34, 168);
+    // rank + points
+    x.fillStyle = "#ff4d6d"; x.font = "16px 'Press Start 2P', monospace";
+    x.fillText(`${d.name}`, 34, 214);
+    x.fillStyle = "#ffd34d"; x.font = "14px 'Press Start 2P', monospace";
+    x.fillText(`RANK #${d.rank > 0 ? d.rank : "?"}  ·  ${d.pts} GLORY PTS`, 34, 248);
+    // belt
+    const belt = store.BELTS[d.rank];
+    x.font = "40px serif"; x.textAlign = "right";
+    x.fillText(belt ? belt.icon : "🥊", W - 40, 150);
+    if (belt) { x.fillStyle = "#ffd34d"; x.font = "10px 'Press Start 2P', monospace";
+      x.fillText(belt.title, W - 40, 180); }
+    // footer
+    x.textAlign = "left"; x.fillStyle = "#9a93c9"; x.font = "13px 'Press Start 2P', monospace";
+    x.fillText(SITE, 34, H - 30);
+    x.fillStyle = "#4dc3ff"; x.font = "10px 'Press Start 2P', monospace";
+    x.fillText("free game · just internet points", 34, H - 14);
+  }
+
+  async function openShare() {
+    const d = await buildShareData();
+    const ratio = d.rec.total ? `${d.rec.hits}/${d.rec.total}` : "no";
+    const beltTxt = store.BELTS[d.rank] ? ` and grabbed the ${store.BELTS[d.rank].icon} ${store.BELTS[d.rank].title} belt` : "";
+    $("#share-text").value =
+      `I went ${ratio} predictions at ${EVENT.shortTitle} on PKO — ranked #${d.rank > 0 ? d.rank : "?"} with ${d.pts} Glory Points${beltTxt}. 🥊\nFree game, just internet points — ${SITE}`;
+    $("#share-modal").classList.remove("hidden");
+    // fonts may need a tick to be ready for canvas
+    if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch {} }
+    drawShareCard(d);
+    $("#share-msg").textContent = "";
+  }
+  function closeShare() { $("#share-modal").classList.add("hidden"); }
+  $("#share-close").onclick = closeShare;
+  $("#share-modal").addEventListener("click", e => { if (e.target.id === "share-modal") closeShare(); });
+  $("#share-copy").onclick = async () => {
+    try { await navigator.clipboard.writeText($("#share-text").value); $("#share-msg").textContent = "✅ Copied!"; }
+    catch { $("#share-text").select(); $("#share-msg").textContent = "Select + copy the text above."; }
+  };
+  $("#share-download").onclick = () => {
+    const a = document.createElement("a");
+    a.download = `pko-${EVENT.id}.png`;
+    a.href = $("#share-canvas").toDataURL("image/png");
+    a.click();
+  };
+  window.PKO.openShare = openShare;
+
+  // fighter modal close
+  $("#fighter-close").onclick = () => $("#fighter-modal").classList.add("hidden");
+  $("#fighter-modal").addEventListener("click", e => { if (e.target.id === "fighter-modal") $("#fighter-modal").classList.add("hidden"); });
+
+  if (CFG.STRIPE_DONATE_URL && !CFG.STRIPE_DONATE_URL.includes("REPLACE_ME")) {
+    $("#donate-link").href = CFG.STRIPE_DONATE_URL;
+  } else {
+    $("#donate-link").removeAttribute("href");
+    $("#donate-link").setAttribute("aria-disabled", "true");
+    $("#donate-link").textContent = "💚 Donations coming soon";
+  }
+
+  // react to auth changes
+  window.addEventListener("pko-auth", async () => {
+    renderAccount();
+    if (store.needsUsername()) { openNameModal(); return; }
+    renderPlay();
+  });
+
+  // ---------- boot ----------
+  (async function boot() {
+    await store.init();
+    renderAccount();
+    if (store.needsUsername()) openNameModal();
+    route("play");
+    renderCountdown();
+    setInterval(renderCountdown, 30000);
+    setInterval(() => { if (!$("#view-play").classList.contains("hidden")) renderPlay(); }, 60000);
+  })();
+})();

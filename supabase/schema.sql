@@ -1,5 +1,5 @@
 -- ===== PKO — Supabase schema =====
--- Run in the Supabase SQL editor. Enforces "no gambling" at the DB level:
+-- Run in the Supabase SQL editor. Enforces the free-points economy at the DB level:
 -- points are only ever GRANTED by server functions, never bought or transferred.
 
 -- ---------- profiles ----------
@@ -7,8 +7,15 @@ create table if not exists profiles (
   id uuid primary key references auth.users on delete cascade,
   name text not null default 'Fighter',
   name_chosen boolean not null default false,
+  showcase_item_id text,
+  showcase_icon text,
+  showcase_title text,
   created_at timestamptz default now()
 );
+
+alter table public.profiles add column if not exists showcase_item_id text;
+alter table public.profiles add column if not exists showcase_icon text;
+alter table public.profiles add column if not exists showcase_title text;
 
 -- NOTE: security-definer + `set search_path = ''` means EVERY object must be
 -- schema-qualified (public.profiles). This trigger runs inside Supabase's auth
@@ -102,10 +109,35 @@ create table if not exists trophies (
 );
 
 -- ---------- public leaderboard ----------
+-- Drop/recreate views so older installs can accept column order/name changes.
+-- CREATE OR REPLACE VIEW cannot rename existing view columns.
+drop view if exists public.event_leaderboard;
+drop view if exists public.leaderboard;
+
 create or replace view leaderboard as
-  select s.user_id, p.name, s.season, s.points
+  select s.user_id, p.name, p.showcase_icon, p.showcase_title, s.season, s.points
   from season_scores s join profiles p on p.id = s.user_id
   where p.name_chosen = true;
+
+-- Event-specific leaderboard. Public aggregate only; does not expose individual
+-- bout picks. Updated as the server settlement job marks predictions settled.
+create or replace view event_leaderboard as
+  select
+    pr.user_id,
+    p.name,
+    pr.event_id,
+    count(*)::int as total_fights,
+    count(*) filter (where pr.settled)::int as settled_fights,
+    count(*) filter (where pr.result = 'void')::int as voided,
+    count(*) filter (where pr.settled and pr.result <> 'void' and pr.won > 0)::int as hits,
+    count(*) filter (where pr.settled and pr.result <> 'void' and pr.won = 0)::int as misses,
+    coalesce(sum(pr.stake), 0)::int as committed_points,
+    coalesce(sum(case when pr.result = 'void' then pr.stake else pr.won end), 0)::int as returned_points,
+    (coalesce(sum(case when pr.result = 'void' then pr.stake else pr.won end), 0) - coalesce(sum(pr.stake), 0))::int as event_points
+  from predictions pr
+  join profiles p on p.id = pr.user_id
+  where p.name_chosen = true
+  group by pr.user_id, p.name, pr.event_id;
 
 -- ========== RLS ==========
 alter table profiles      enable row level security;
@@ -117,6 +149,16 @@ alter table point_history enable row level security;
 alter table predictions   enable row level security;
 alter table trophies      enable row level security;
 
+drop policy if exists "read profiles" on public.profiles;
+drop policy if exists "set own name" on public.profiles;
+drop policy if exists "read scores" on public.season_scores;
+drop policy if exists "read bonus windows" on public.event_bonus_windows;
+drop policy if exists "read own bonus claims" on public.event_bonus_claims;
+drop policy if exists "read own point history" on public.point_history;
+drop policy if exists "own preds" on public.predictions;
+drop policy if exists "read trophies" on public.trophies;
+drop policy if exists "read own trophies" on public.trophies;
+
 create policy "read profiles"  on profiles      for select using (true);
 create policy "set own name"   on profiles      for update using (auth.uid() = id) with check (auth.uid() = id);
 create policy "read scores"    on season_scores for select using (true);
@@ -124,7 +166,7 @@ create policy "read bonus windows" on event_bonus_windows for select using (true
 create policy "read own bonus claims" on event_bonus_claims for select using (auth.uid() = user_id);
 create policy "read own point history" on point_history for select using (auth.uid() = user_id);
 create policy "own preds"      on predictions   for select using (auth.uid() = user_id);
-create policy "read trophies"  on trophies      for select using (true);
+create policy "read own trophies"  on trophies  for select using (auth.uid() = user_id);
 -- No client INSERT/UPDATE on points/predictions/trophies: only the SECURITY
 -- DEFINER functions below write points. That's what makes points unmintable.
 
@@ -235,10 +277,31 @@ begin
   values (auth.uid(), yr, 'prediction_stake', p_event, 'Locked predictions for ' || upper(p_event), -total, new_bal);
 end; $$;
 
+-- Current configured live-event bonuses. Keep this aligned with `js/data.js`.
+insert into public.event_bonus_windows (bonus_id, event_id, label, amount, starts_at, ends_at)
+values
+  ('ufc-329-live-checkin', 'ufc-329', 'Live event check-in', 329, '2026-07-11T19:00:00-07:00', '2026-07-11T23:00:00-07:00'),
+  ('ufc-329-main-event', 'ufc-329', 'Main event bonus', 200, '2026-07-11T22:35:00-07:00', '2026-07-11T23:00:00-07:00')
+on conflict (bonus_id) do update set
+  event_id = excluded.event_id,
+  label = excluded.label,
+  amount = excluded.amount,
+  starts_at = excluded.starts_at,
+  ends_at = excluded.ends_at;
+
 -- Settlement + belt awards run SERVER-SIDE (cron / Edge Function) after the real
 -- results are known: for each prediction, if pick = real winner, add stake*multiplier
 -- to season_scores.points; once the card is final, rank the season leaderboard and
 -- insert top-5 belt trophies + participation badges. Never expose to clients.
+-- Trophy inventory should include:
+--   kind='badge' title='Gold/Silver/Bronze/Copper/Iron Event Badge' for event ranks 1-5
+--   kind='belt'  title='<Division> Belt' for the highest event score in each division
+-- Players can select one owned trophy/member badge as profiles.showcase_*; these are
+-- virtual items only and cannot be bought, sold, transferred, traded, or cashed out.
+-- Also insert one point_history row per settlement movement:
+--   prediction_win    amount = stake*multiplier, balance = new score
+--   prediction_loss   amount = 0, balance = current score
+--   prediction_refund amount = stake, balance = new score
 --
 -- VOIDED BOUTS: if a real fight is scratched (cancelled, weight miss, pulled),
 -- mark predictions for that bout result='void', refund the held stake

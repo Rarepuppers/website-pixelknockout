@@ -1,18 +1,18 @@
 # Deploying PKO
 
-The app is a **static site** in `website-pixelknockout/site/` (HTML/CSS/JS, no build step).
-It talks to Supabase directly using the public anon key in `site/js/config.js`.
+The app is a **static site** in the `website-pixelknockout/` repository root (HTML/CSS/JS, no build step).
+It talks to Supabase directly using the public anon key in `js/config.js`.
 
 ## Fastest: Netlify Drop (no account integration, ~30s)
 1. Go to https://app.netlify.com/drop
-2. Drag the **`site/`** folder onto the page.
+2. Drag the **`website-pixelknockout/`** folder contents onto the page.
 3. You get a live URL like `https://random-name.netlify.app`.
 4. (Optional) Claim the site to a free Netlify account to keep it + add a custom domain.
 
 ## Recommended for ongoing: Vercel (git-connected)
 1. Push the repo to GitHub.
 2. https://vercel.com → **New Project** → import the repo.
-3. **Framework Preset:** Other. **Root Directory:** `website-pixelknockout/site`.
+3. **Framework Preset:** Other. **Root Directory:** `website-pixelknockout`.
    No build command, no output directory (it's static).
 4. **Deploy** → `https://<name>.vercel.app`.
 
@@ -31,7 +31,7 @@ Your local-only URLs won't authorize the live site. Add the production URL in tw
 
 ## Before going fully public
 - [ ] Stripe: replace `STRIPE_DONATE_URL` in `config.js` with your real Payment Link.
-- [ ] Odds: add `ODDS_API_KEY` in `config.js` for live odds (else placeholder odds).
+- [ ] Difficulty data: add `ODDS_API_KEY` in `config.js`, or proxy the feed through a Supabase Edge Function so the key is not exposed in static JS.
 - [ ] Google OAuth consent screen: **Publish app** (out of "Testing") so anyone can log in.
 - [ ] Rotate the Supabase secret key + DB password if they were ever in plaintext.
 - [ ] Rotate the Google OAuth client secret if `googlecloud_oauth_client_secret.json` was ever shared or committed.

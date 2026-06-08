@@ -12,6 +12,7 @@
   const CFG = window.PKO_CONFIG;
   const SEASON = CFG.CURRENT_SEASON;
   const KEY = "pko_state_v2";
+  const ODDS_CACHE_KEY = "pko_difficulty_cache_v1";
   const useSupabase = !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY);
   const today = () => new Date().toISOString().slice(0, 10);
 
@@ -58,8 +59,9 @@
     const names = ["KOKing","GlovesOff","PixelPanther","TapMachine","OctaGoon","RoundOne",
       "SubZero","JabbaTheCut","GuillotineGuy","FightNerd","CageRattler","SprawlBrawl",
       "LegKickLarry","DivisionDan","ChinCheck"];
+    const icons = ["🥇","🥈","🥉","🥉","🥊","🏆","🥊","🥈","🥊","🏆","🥉","🥊","🥊","🥈","🥊"];
     s.bots = names.map((n, i) => ({ id: "bot_" + i, name: n,
-      points: Math.floor(400 + Math.random() * 5200) }));
+      points: Math.floor(400 + Math.random() * 5200), showcaseIcon: icons[i], showcaseTitle: "Shrine item" }));
   }
 
   // ---------- Supabase (lazy) ----------
@@ -95,41 +97,141 @@
         const s = ensure(load()); save(s);
         this.user = s.user || null;
       }
-      await this.fetchOdds();           // refresh odds (no-op without key)
+      await this.fetchOdds();           // refresh card difficulty (no-op without key)
       if (this.user && this.user.nameChosen) await this._runGrants();
       return this.user;
     },
 
     async _mapUser(c, u) {
       let name = (u.user_metadata && u.user_metadata.name) || null, chosen = false;
+      let createdAt = u.created_at || new Date().toISOString(), showcaseItemId = null, showcaseIcon = null, showcaseTitle = null;
       try {
-        const { data } = await c.from("profiles").select("name,name_chosen").eq("id", u.id).single();
-        if (data) { name = data.name; chosen = !!data.name_chosen; }
+        const { data } = await c.from("profiles").select("name,name_chosen,created_at,showcase_item_id,showcase_icon,showcase_title").eq("id", u.id).single();
+        if (data) {
+          name = data.name; chosen = !!data.name_chosen; createdAt = data.created_at || createdAt;
+          showcaseItemId = data.showcase_item_id; showcaseIcon = data.showcase_icon; showcaseTitle = data.showcase_title;
+        }
       } catch {}
-      return { id: u.id, email: u.email, name: name || (u.email || "Fighter").split("@")[0], nameChosen: chosen };
+      return { id: u.id, email: u.email, name: name || (u.email || "Fighter").split("@")[0], nameChosen: chosen,
+        createdAt, showcaseItemId, showcaseIcon, showcaseTitle };
     },
 
-    // ---------- odds: lock at pick-time ----------
+    // ---------- card difficulty: lock at pick-time ----------
     async fetchOdds() {
-      if (!CFG.ODDS_API_KEY) { this.EVENT.oddsSource = "placeholder"; return; }
+      const cacheMinutes = CFG.ODDS_CACHE_MINUTES || 15;
+      const cacheValid = (cached) => cached && cached.eventId === this.EVENT.id &&
+        Date.now() - cached.fetchedAt < cacheMinutes * 60 * 1000;
+      const applyCached = () => {
+        try {
+          const cached = JSON.parse(localStorage.getItem(ODDS_CACHE_KEY));
+          if (!cacheValid(cached)) return false;
+          this._applyOddsSnapshot(cached);
+          this.EVENT.oddsSource = "cached";
+          this.EVENT.oddsUpdatedAt = cached.fetchedAt;
+          this.EVENT.oddsMatchedBouts = cached.matchedBouts || 0;
+          return true;
+        } catch { return false; }
+      };
+
+      if (!CFG.ODDS_ENABLED || !CFG.ODDS_API_KEY) {
+        this.EVENT.oddsSource = "placeholder";
+        this.EVENT.oddsStatus = CFG.ODDS_ENABLED ? "Add an external data key to enable card difficulty updates." : "Card difficulty updates disabled.";
+        return;
+      }
+      if (applyCached()) return;
+
       try {
         const url = `https://api.the-odds-api.com/v4/sports/${CFG.ODDS_SPORT}/odds/` +
-          `?regions=${CFG.ODDS_REGION}&markets=h2h&oddsFormat=american&apiKey=${CFG.ODDS_API_KEY}`;
-        const games = await (await fetch(url)).json();
-        const find = (real) => {
-          for (const g of games) {
-            const o = (g.bookmakers?.[0]?.markets?.[0]?.outcomes) || [];
-            const hit = o.find(x => x.name && real && x.name.toLowerCase().includes(real.split(" ").pop().toLowerCase()));
-            if (hit) return hit.price;
-          }
-          return null;
-        };
-        this.EVENT.bouts.forEach(b => {
-          const oa = find(b.a.real), ob = find(b.b.real);
-          if (oa != null) b.oddsA = oa; if (ob != null) b.oddsB = ob;
-        });
+          `?regions=${encodeURIComponent(CFG.ODDS_REGION)}&markets=${encodeURIComponent(CFG.ODDS_MARKET || "h2h")}` +
+          `&oddsFormat=american&apiKey=${encodeURIComponent(CFG.ODDS_API_KEY)}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Odds API returned ${res.status}`);
+        const games = await res.json();
+        const snapshot = this._buildOddsSnapshot(games);
+        if (!snapshot.matchedBouts) throw new Error("No matching MMA odds found for this card.");
+        localStorage.setItem(ODDS_CACHE_KEY, JSON.stringify(snapshot));
+        this._applyOddsSnapshot(snapshot);
         this.EVENT.oddsSource = "live";
-      } catch { this.EVENT.oddsSource = "placeholder"; }
+        this.EVENT.oddsUpdatedAt = snapshot.fetchedAt;
+        this.EVENT.oddsMatchedBouts = snapshot.matchedBouts;
+        this.EVENT.oddsStatus = `Matched ${snapshot.matchedBouts}/${this.EVENT.bouts.length} bouts from ${snapshot.bookmakers} bookmakers.`;
+      } catch (e) {
+        if (applyCached()) return;
+        this.EVENT.oddsSource = "placeholder";
+        this.EVENT.oddsStatus = e.message || "Card difficulty updates unavailable.";
+      }
+    },
+
+    _normName(name) {
+      return String(name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+    },
+    _nameParts(name) {
+      const n = this._normName(name);
+      const parts = n.split(" ").filter(Boolean);
+      return { full: n, first: parts[0] || "", last: parts[parts.length - 1] || "" };
+    },
+    _namesMatch(a, b) {
+      const x = this._nameParts(a), y = this._nameParts(b);
+      if (!x.last || !y.last) return false;
+      return x.full === y.full || (x.last === y.last && (!x.first || !y.first || x.first[0] === y.first[0]));
+    },
+    _median(nums) {
+      const vals = nums.filter(n => Number.isFinite(n)).sort((a, b) => a - b);
+      if (!vals.length) return null;
+      const mid = Math.floor(vals.length / 2);
+      return vals.length % 2 ? vals[mid] : Math.round((vals[mid - 1] + vals[mid]) / 2);
+    },
+    _bookmakerOutcomes(game) {
+      const rows = [];
+      (game.bookmakers || []).forEach(book => {
+        const market = (book.markets || []).find(m => m.key === (CFG.ODDS_MARKET || "h2h"));
+        (market?.outcomes || []).forEach(outcome => {
+          if (Number.isFinite(outcome.price)) rows.push({ bookmaker: book.key, name: outcome.name, price: outcome.price });
+        });
+      });
+      return rows;
+    },
+    _findBoutGame(games, bout) {
+      let best = null;
+      games.forEach(game => {
+        const outcomes = this._bookmakerOutcomes(game);
+        const aPrices = outcomes.filter(o => this._namesMatch(o.name, bout.a.real)).map(o => o.price);
+        const bPrices = outcomes.filter(o => this._namesMatch(o.name, bout.b.real)).map(o => o.price);
+        if (aPrices.length && bPrices.length) {
+          const score = aPrices.length + bPrices.length;
+          if (!best || score > best.score) best = { game, aPrices, bPrices, score };
+        }
+      });
+      return best;
+    },
+    _buildOddsSnapshot(games) {
+      const snapshot = { eventId: this.EVENT.id, fetchedAt: Date.now(), bouts: {}, matchedBouts: 0, bookmakers: 0 };
+      const books = new Set();
+      this.EVENT.bouts.forEach(bout => {
+        const match = this._findBoutGame(games, bout);
+        if (!match) return;
+        (match.game.bookmakers || []).forEach(b => books.add(b.key));
+        const oddsA = this._median(match.aPrices);
+        const oddsB = this._median(match.bPrices);
+        if (oddsA == null || oddsB == null) return;
+        snapshot.bouts[bout.id] = {
+          oddsA, oddsB,
+          sourceTitle: match.game.home_team && match.game.away_team ? `${match.game.home_team} vs ${match.game.away_team}` : match.game.id,
+        };
+        snapshot.matchedBouts += 1;
+      });
+      snapshot.bookmakers = books.size;
+      return snapshot;
+    },
+    _applyOddsSnapshot(snapshot) {
+      this.EVENT.bouts.forEach(bout => {
+        const hit = snapshot.bouts && snapshot.bouts[bout.id];
+        if (!hit) return;
+        bout.oddsA = hit.oddsA;
+        bout.oddsB = hit.oddsB;
+        bout.oddsSourceTitle = hit.sourceTitle;
+      });
     },
 
     // ---------- auth ----------
@@ -150,8 +252,12 @@
     },
     _localSignIn(email) {
       const s = ensure(load());
+      const id = "local_" + btoa(email).slice(0, 12);
+      const prev = s.user && s.user.id === id ? s.user : {};
       s.user = { id: "local_" + btoa(email).slice(0, 12), email,
-        name: (email.split("@")[0] || "Fighter"), nameChosen: false };
+        name: prev.name || (email.split("@")[0] || "Fighter"), nameChosen: !!prev.nameChosen,
+        createdAt: prev.createdAt || new Date().toISOString(),
+        showcaseItemId: prev.showcaseItemId || null, showcaseIcon: prev.showcaseIcon || null, showcaseTitle: prev.showcaseTitle || null };
       save(s); this.user = s.user;
       window.dispatchEvent(new Event("pko-auth"));
       return { ok: true, instant: true };
@@ -239,7 +345,7 @@
           id: r.id, season: r.season, type: r.kind, eventId: r.event_id,
           label: r.label, amount: r.amount, balance: r.balance, createdAt: r.created_at,
         })); }
-      const s = ensure(load()); return (s.history || []).slice(0, limit);
+      const s = ensure(load()); return (s.history || []).filter(h => h.season === SEASON).slice(0, limit);
     },
     async getBonusClaims() {
       if (useSupabase) { const c = await getSb();
@@ -330,6 +436,24 @@
     // ---------- trophies / belts (virtual, zero value) ----------
     BELTS: { 1:{icon:"🏆",title:"Undisputed Champ"},2:{icon:"🥈",title:"Interim Champ"},
       3:{icon:"🥉",title:"#1 Contender"},4:{icon:"🎖️",title:"Top Contender"},5:{icon:"🎖️",title:"Ranked Contender"} },
+    EVENT_BADGES: {
+      1: { icon: "🥇", title: "Gold Event Badge", material: "Gold" },
+      2: { icon: "🥈", title: "Silver Event Badge", material: "Silver" },
+      3: { icon: "🥉", title: "Bronze Event Badge", material: "Bronze" },
+      4: { icon: "🟤", title: "Copper Event Badge", material: "Copper" },
+      5: { icon: "⚙️", title: "Iron Event Badge", material: "Iron" },
+    },
+    WEIGHT_BELTS: {
+      "HEAVYWEIGHT": { icon: "🏆", title: "Heavyweight Belt" },
+      "LIGHT HEAVY": { icon: "🏆", title: "Light Heavyweight Belt" },
+      "MIDDLEWEIGHT": { icon: "🏆", title: "Middleweight Belt" },
+      "WELTERWEIGHT": { icon: "🏆", title: "Welterweight Belt" },
+      "LIGHTWEIGHT": { icon: "🏆", title: "Lightweight Belt" },
+      "FEATHERWEIGHT": { icon: "🏆", title: "Featherweight Belt" },
+      "BANTAMWEIGHT": { icon: "🏆", title: "Bantamweight Belt" },
+      "FLYWEIGHT": { icon: "🏆", title: "Flyweight Belt" },
+      "STRAWWEIGHT": { icon: "🏆", title: "Strawweight Belt" },
+    },
 
     async _awardTrophies(eventId) {
       const s = ensure(load());
@@ -345,6 +469,15 @@
         belt = this.BELTS[rank];
         add({ id: `${eventId}-belt`, season: SEASON, eventId, eventTitle: ev.title,
           kind: "belt", icon: belt.icon, title: belt.title, sub: `#${rank} · ${ev.title}` });
+        const badge = this.EVENT_BADGES[rank];
+        add({ id: `${eventId}-place-${rank}`, season: SEASON, eventId, eventTitle: ev.title,
+          kind: "badge", icon: badge.icon, title: badge.title, sub: `${badge.material} · #${rank} for this event` });
+      }
+      if (rank === 1) {
+        const division = ev.bouts[0]?.weight || "WELTERWEIGHT";
+        const divBelt = this.WEIGHT_BELTS[division] || { icon: "🏆", title: `${division} Belt` };
+        add({ id: `${eventId}-${division.toLowerCase().replace(/\s+/g, "-")}-belt`, season: SEASON, eventId, eventTitle: ev.title,
+          kind: "belt", icon: divBelt.icon, title: divBelt.title, sub: `Most points · ${ev.shortTitle}` });
       }
       save(s);
       return { rank, belt };
@@ -367,8 +500,43 @@
 
     async getTrophies() {
       if (useSupabase) { const c = await getSb();
-        const { data } = await c.from("trophies").select("*").order("id"); return data || []; }
+        const { data } = await c.from("trophies").select("*").eq("user_id", this.user.id).order("id"); return data || []; }
       const s = ensure(load()); return s.trophies || [];
+    },
+    _membershipItems() {
+      if (!this.user || !this.user.createdAt) return [];
+      const ageDays = Math.floor((Date.now() - new Date(this.user.createdAt).getTime()) / 86400000);
+      const mk = (id, days, icon, title, sub) => ageDays >= days ? { id, kind: "member", icon, title, sub, season: SEASON } : null;
+      return [
+        { id: "member-started", kind: "member", icon: "🎟️", title: "Octagon Member", sub: "Account created", season: SEASON },
+        mk("member-1-month", 30, "📅", "1 Month Member", "Member for 1 month"),
+        mk("member-6-months", 182, "🗓️", "6 Month Member", "Member for 6 months"),
+        mk("member-1-year", 365, "🌟", "1 Year Member", "Member for 1 year"),
+      ].filter(Boolean);
+    },
+    async getShrineItems() {
+      const trophies = await this.getTrophies();
+      return [...this._membershipItems(), ...trophies].map(t => ({
+        id: t.id, kind: t.kind || "award", icon: t.icon || "🎖️", title: t.title || "Award",
+        sub: t.sub || t.eventTitle || "", season: t.season || SEASON,
+      }));
+    },
+    async setShowcaseItem(itemId) {
+      const items = await this.getShrineItems();
+      const item = items.find(i => i.id === itemId);
+      if (!item) throw new Error("That shrine item is not available.");
+      if (useSupabase) {
+        const c = await getSb();
+        const { error } = await c.from("profiles").update({
+          showcase_item_id: item.id, showcase_icon: item.icon, showcase_title: item.title,
+        }).eq("id", this.user.id);
+        if (error) throw new Error(error.message);
+      } else {
+        const s = ensure(load());
+        s.user.showcaseItemId = item.id; s.user.showcaseIcon = item.icon; s.user.showcaseTitle = item.title; save(s);
+      }
+      this.user.showcaseItemId = item.id; this.user.showcaseIcon = item.icon; this.user.showcaseTitle = item.title;
+      window.dispatchEvent(new Event("pko-auth"));
     },
 
     // ---------- leaderboard ----------
@@ -376,12 +544,48 @@
       if (useSupabase) { const c = await getSb();
         const { data } = await c.from("leaderboard").select("*").eq("season", SEASON)
           .order("points", { ascending: false }).limit(100);
-        return (data || []).map(r => ({ id: r.user_id, name: r.name, points: r.points, me: this.user && r.user_id === this.user.id })); }
+        return (data || []).map(r => ({ id: r.user_id, name: r.name, points: r.points,
+          showcaseIcon: r.showcase_icon, showcaseTitle: r.showcase_title, me: this.user && r.user_id === this.user.id })); }
       const s = ensure(load()); seedBots(s); save(s);
       const rows = [...s.bots];
       if (this.user && this.user.nameChosen)
-        rows.push({ id: this.user.id, name: this.user.name, points: s.points[SEASON] || 0, me: true });
+        rows.push({ id: this.user.id, name: this.user.name, points: s.points[SEASON] || 0,
+          showcaseIcon: this.user.showcaseIcon, showcaseTitle: this.user.showcaseTitle, me: true });
       return rows.sort((a, b) => b.points - a.points);
+    },
+    async getEventLeaderboard(eventId) {
+      if (useSupabase) { const c = await getSb();
+        const { data } = await c.from("event_leaderboard").select("*").eq("event_id", eventId)
+          .order("event_points", { ascending: false }).order("hits", { ascending: false }).limit(100);
+        return (data || []).map(r => ({
+          id: r.user_id, name: r.name, eventPoints: Number(r.event_points) || 0,
+          committed: Number(r.committed_points) || 0, returned: Number(r.returned_points) || 0,
+          hits: Number(r.hits) || 0, misses: Number(r.misses) || 0, voided: Number(r.voided) || 0,
+          settled: Number(r.settled_fights) || 0, total: Number(r.total_fights) || 0,
+          me: this.user && r.user_id === this.user.id,
+        })); }
+
+      const s = ensure(load()); seedBots(s); save(s);
+      const rows = s.bots.slice(0, 12).map((b, i) => {
+        const total = this.EVENT.bouts.length;
+        const settled = this.EVENT.bouts.filter(x => x.result).length;
+        const hits = Math.max(0, Math.min(settled, Math.floor((settled + i) / 2)));
+        const committed = Math.min(1000, 120 + ((i * 73) % 520));
+        const returned = hits * (140 + ((i * 41) % 180));
+        return { id: b.id, name: b.name, eventPoints: returned - committed, committed, returned,
+          hits, misses: Math.max(0, settled - hits), voided: 0, settled, total, me: false };
+      });
+      if (this.user && this.user.nameChosen) {
+        const preds = Object.values(s.predictions[eventId] || {});
+        const settled = preds.filter(p => p.settled && !p.voided);
+        const committed = preds.reduce((n, p) => n + (Number(p.stake) || 0), 0);
+        const returned = preds.reduce((n, p) => n + (Number(p.won) || 0) + (p.voided ? Number(p.stake) || 0 : 0), 0);
+        rows.push({ id: this.user.id, name: this.user.name, eventPoints: returned - committed,
+          committed, returned, hits: settled.filter(p => p.won > 0).length,
+          misses: settled.filter(p => !p.won).length, voided: preds.filter(p => p.voided).length,
+          settled: preds.filter(p => p.settled).length, total: preds.length, me: true });
+      }
+      return rows.sort((a, b) => b.eventPoints - a.eventPoints || b.hits - a.hits);
     },
   };
 

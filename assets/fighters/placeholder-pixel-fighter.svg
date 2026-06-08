@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="Pixel fighter placeholder">
+  <rect width="128" height="128" fill="none"/>
+  <g shape-rendering="crispEdges">
+    <rect x="36" y="112" width="56" height="8" fill="#201626" opacity=".55"/>
+    <rect x="56" y="8" width="16" height="8" fill="#ffd34d"/>
+    <rect x="48" y="16" width="32" height="8" fill="#ffd34d"/>
+    <rect x="40" y="24" width="48" height="8" fill="#ffd34d"/>
+    <rect x="40" y="32" width="48" height="8" fill="#2a1b35"/>
+    <rect x="40" y="40" width="48" height="24" fill="#d79a62"/>
+    <rect x="32" y="32" width="8" height="16" fill="#f4c27b"/>
+    <rect x="88" y="32" width="8" height="16" fill="#f4c27b"/>
+    <rect x="48" y="48" width="8" height="8" fill="#19131f"/>
+    <rect x="72" y="48" width="8" height="8" fill="#19131f"/>
+    <rect x="56" y="64" width="16" height="8" fill="#8c4a3c"/>
+    <rect x="48" y="72" width="32" height="8" fill="#f4c27b"/>
+    <rect x="40" y="80" width="48" height="24" fill="#4d7cff"/>
+    <rect x="56" y="80" width="16" height="8" fill="#ffd34d"/>
+    <rect x="32" y="80" width="8" height="24" fill="#d79a62"/>
+    <rect x="88" y="80" width="8" height="24" fill="#d79a62"/>
+    <rect x="24" y="96" width="16" height="16" fill="#f44d4d"/>
+    <rect x="88" y="96" width="16" height="16" fill="#f44d4d"/>
+    <rect x="20" y="92" width="8" height="8" fill="#ffd34d"/>
+    <rect x="100" y="92" width="8" height="8" fill="#ffd34d"/>
+    <rect x="48" y="104" width="12" height="16" fill="#20283c"/>
+    <rect x="68" y="104" width="12" height="16" fill="#20283c"/>
+    <rect x="40" y="120" width="20" height="8" fill="#1a1320"/>
+    <rect x="68" y="120" width="20" height="8" fill="#1a1320"/>
+  </g>
+</svg>
