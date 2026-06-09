@@ -909,7 +909,7 @@ end; $$;
 -- Current configured live-event bonuses. Keep this aligned with `js/data.js`.
 insert into public.event_bonus_windows (bonus_id, event_id, label, amount, starts_at, ends_at)
 values
-  ('ufc-329-live-checkin', 'ufc-329', 'Live event check-in', 329, '2026-07-11T19:00:00-07:00', '2026-07-11T23:00:00-07:00'),
+  ('ufc-329-live-checkin', 'ufc-329', 'Live event check-in', 329, '2026-07-11T18:00:00-07:00', '2026-07-11T23:00:00-07:00'),
   ('ufc-329-main-event', 'ufc-329', 'Main event bonus', 200, '2026-07-11T22:35:00-07:00', '2026-07-11T23:00:00-07:00')
 on conflict (bonus_id) do update set
   event_id = excluded.event_id,
@@ -924,8 +924,8 @@ values (
   'UFC 329 - Knockout King vs The Blessed',
   'UFC 329',
   2026,
-  '2026-07-11T19:00:00-07:00',
-  '2026-07-11T19:00:00-07:00',
+  '2026-07-11T18:00:00-07:00',
+  '2026-07-11T18:00:00-07:00',
   '2026-07-11T23:00:00-07:00'
 )
 on conflict (event_id) do update set

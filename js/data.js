@@ -57,24 +57,146 @@ window.PKO_PERSONAS = {
     country: "United States", flag: "🇺🇸",
     facts: ["Olympic gold medalist in wrestling.", "Crossed over from elite amateur wrestling.", "Heavyweight prospect."],
     jokes: ["Suplex animation is banned in three pixel states.", "Wrestling so good the cage files a complaint.", "Gravity is the opponent's real problem."] },
+  "Elisha Ellison": { name: "Eli Smashison", tag: "Heavyweight mystery meter rising", emoji: "EE", color: "#ffb84d",
+    country: "United States", flag: "🇺🇸",
+    facts: ["Heavyweight prospect listed on the current PKO schedule.", "Public profile details should be verified again during fight week.", "PKO treats late-card information as provisional until official listings settle."],
+    jokes: ["Walks in with a boss-bar silhouette.", "So much tape to watch that the pixels asked for overtime.", "Mystery stats replaced by heavyweight thud math."] },
+  "Lone'er Kavanagh": { name: "Lonestar Kava", tag: "Fast flyweight spark", emoji: "LK", color: "#4dc3ff",
+    country: "England", flag: "🏴",
+    facts: ["English flyweight prospect.", "Listed in the flyweight schedule for this PKO card.", "Fight-week roster details should be refreshed before public play."],
+    jokes: ["Moves like the sprite sheet has extra frames.", "Footwork leaves tiny afterimages on the mat.", "The apostrophe gets its own corner stool."] },
   "Robert Whittaker": { name: "Bobby the Reaper", tag: "Counter-striking grim pixel 💀", emoji: "💀", color: "#d7d2ff",
     country: "Australia", flag: "🇦🇺",
     facts: ["Former UFC middleweight champion.", "Australian counter-striking specialist, 'The Reaper'.", "Elite footwork and fight IQ."],
     jokes: ["Counters punches you haven't thrown yet.", "The Reaper collects pixels, not souls.", "Footwork tutorial sold separately."] },
-  // (Lone'er Kavanagh, Elisha Ellison, Nikita Krylov intentionally left out to
-  //  demonstrate the auto-generated 'Parts Unknown' fallback below.)
+  "Nikita Krylov": { name: "Nikita Kryload", tag: "Light-heavy pressure file", emoji: "NK", color: "#7bd88f",
+    country: "Ukraine", flag: "🇺🇦",
+    facts: ["Ukrainian light heavyweight veteran.", "Nicknamed 'The Miner'.", "Known as an experienced finisher across major MMA promotions."],
+    jokes: ["Every combo arrives with a hard-hat warning.", "Digs for submissions under the pixel canvas.", "Pressure meter starts at round-three levels."] },
 };
 
+window.PKO_PERSONA_IMAGES = window.PKO_PERSONA_IMAGES || {};
 function _setPersonaImage(name, img) {
+  window.PKO_PERSONA_IMAGES[name] = img;
   if (window.PKO_PERSONAS[name]) window.PKO_PERSONAS[name].img = img;
 }
-_setPersonaImage("Conor McGregor", "assets/fighters/mcgregor-placeholder.svg");
-_setPersonaImage("Max Holloway", "assets/fighters/holloway-placeholder.svg");
-_setPersonaImage("Paddy Pimblett", "assets/fighters/pimblett-placeholder.svg");
-_setPersonaImage("Benoît Saint Denis", "assets/fighters/saint-denis-placeholder.svg");
-_setPersonaImage("Benoit Saint Denis", "assets/fighters/saint-denis-placeholder.svg");
-_setPersonaImage("Cory Sandhagen", "assets/fighters/sandhagen-placeholder.svg");
-_setPersonaImage("Robert Whittaker", "assets/fighters/whittaker-placeholder.svg");
+_setPersonaImage("Conor McGregor", "assets/fighters/generated/mcgregor.png");
+_setPersonaImage("Max Holloway", "assets/fighters/generated/holloway.png");
+_setPersonaImage("Paddy Pimblett", "assets/fighters/generated/pimblett.png");
+_setPersonaImage("Benoît Saint Denis", "assets/fighters/generated/saint-denis.png");
+_setPersonaImage("Benoit Saint Denis", "assets/fighters/generated/saint-denis.png");
+_setPersonaImage("Cory Sandhagen", "assets/fighters/generated/sandhagen.png");
+_setPersonaImage("Mario Bautista", "assets/fighters/generated/bautista.png");
+_setPersonaImage("Brandon Royval", "assets/fighters/generated/royval.png");
+_setPersonaImage("Lone'er Kavanagh", "assets/fighters/generated/kavanagh.png");
+_setPersonaImage("Gable Steveson", "assets/fighters/generated/steveson.png");
+_setPersonaImage("Elisha Ellison", "assets/fighters/generated/ellison.png");
+_setPersonaImage("Robert Whittaker", "assets/fighters/generated/whittaker.png");
+_setPersonaImage("Nikita Krylov", "assets/fighters/generated/krylov.png");
+_setPersonaImage("Ilia Topuria", "assets/fighters/generated/topuria.png");
+_setPersonaImage("Justin Gaethje", "assets/fighters/generated/gaethje.png");
+_setPersonaImage("Alex Pereira", "assets/fighters/generated/pereira.png");
+_setPersonaImage("Ciryl Gane", "assets/fighters/generated/gane.png");
+_setPersonaImage("Sean O'Malley", "assets/fighters/generated/omalley.png");
+_setPersonaImage("Michael Chandler", "assets/fighters/generated/chandler.png");
+_setPersonaImage("Bo Nickal", "assets/fighters/generated/nickal.png");
+_setPersonaImage("Diego Lopes", "assets/fighters/generated/lopes.png");
+_setPersonaImage("Derrick Lewis", "assets/fighters/generated/derrick-lewis.png");
+_setPersonaImage("Arman Tsarukyan", "assets/fighters/generated/arman.png");
+
+window.PKO_RING_CREW = [
+  {
+    realName: "Arianny Celeste",
+    pixelName: "Ari Arcade",
+    role: "Round-card presenter",
+    note: "Original PKO pixel presenter art; public-name reference only, not a likeness.",
+    img: "assets/characters/arianny-celeste.png",
+  },
+  {
+    realName: "Brittney Palmer",
+    pixelName: "Brit Pixel Palmer",
+    role: "Round-card presenter",
+    note: "Original PKO pixel presenter art; public-name reference only, not a likeness.",
+    img: "assets/characters/brittney-palmer.png",
+  },
+  {
+    realName: "Luciana Andrade",
+    pixelName: "Luci Roundbyte",
+    role: "Round-card presenter",
+    note: "Original PKO pixel presenter art; public-name reference only, not a likeness.",
+    img: "assets/characters/luciana-andrade.png",
+  },
+  {
+    realName: "Carly Baker",
+    pixelName: "Carly Cardbreaker",
+    role: "Round-card presenter",
+    note: "Original PKO pixel presenter art; public-name reference only, not a likeness.",
+    img: "assets/characters/carly-baker.png",
+  },
+  {
+    realName: "Generic PKO character",
+    pixelName: "Penny Roundcard",
+    role: "Reusable event presenter",
+    note: "Use this when a card needs presenter art without another real-name reference.",
+    img: "assets/characters/generic-ring-card-host.png",
+  },
+  {
+    realName: "Bruce Buffer",
+    pixelName: "Bruce Bitbuffer",
+    role: "Arena announcer",
+    note: "Original PKO pixel announcer art; public-name reference only, not a likeness.",
+    img: "assets/characters/bruce-buffer.png",
+  },
+  {
+    realName: "Joe Rogan",
+    pixelName: "Joe Roguelike",
+    role: "Commentator",
+    note: "Original PKO pixel broadcast art; public-name reference only, not a likeness.",
+    img: "assets/characters/joe-rogan.png",
+  },
+  {
+    realName: "Mike Goldberg",
+    pixelName: "Mike Goldbar",
+    role: "Commentator",
+    note: "Original PKO pixel broadcast art; public-name reference only, not a likeness.",
+    img: "assets/characters/mike-goldberg.png",
+  },
+  {
+    realName: "Jon Anik",
+    pixelName: "Jon Arcade",
+    role: "Commentator",
+    note: "Original PKO pixel broadcast art; public-name reference only, not a likeness.",
+    img: "assets/characters/jon-anik.png",
+  },
+  {
+    realName: "Dana White",
+    pixelName: "Dana Byte",
+    role: "UFC president / CEO",
+    note: "Original PKO pixel executive art; public-name reference only, not a likeness.",
+    img: "assets/characters/dana-white.png",
+  },
+  {
+    realName: "Scott Coker",
+    pixelName: "Scott Codeker",
+    role: "MMA executive / promoter",
+    note: "Original PKO pixel executive art; public-name reference only, not a likeness.",
+    img: "assets/characters/scott-coker.png",
+  },
+  {
+    realName: "Nina Drama",
+    pixelName: "Nina Datastream",
+    role: "MMA creator / interviewer",
+    note: "Original PKO pixel media art; public-name reference only, not a likeness.",
+    img: "assets/characters/nina-drama.png",
+  },
+  {
+    realName: "Ariel Helwani",
+    pixelName: "Ariel Headline",
+    role: "MMA journalist",
+    note: "Original PKO pixel media art; public-name reference only, not a likeness.",
+    img: "assets/characters/ariel-helwani.png",
+  },
+];
 
 // ---------- country lookup (real name -> country + flag) ----------
 // Used by the generator so auto-made personas still get a REAL flag. In
@@ -642,7 +764,8 @@ window.PKO_LEGENDS = [
 // alias map OR generated fallback, always with the real name attached
 window.PKO_getPersona = function (real) {
   const base = window.PKO_PERSONAS[real] || window.PKO_makePersona(real);
-  return Object.assign({ real, ranking: window.PKO_getRanking(real) }, base);
+  const img = window.PKO_PERSONA_IMAGES && window.PKO_PERSONA_IMAGES[real];
+  return Object.assign({ real, ranking: window.PKO_getRanking(real) }, base, img ? { img } : {});
 };
 
 window.PKO_allRosterFighters = function () {
@@ -688,7 +811,7 @@ const _CARD = {
   shortTitle: "UFC 329",
   date: "Sat Jul 11, 2026 · T-Mobile Arena, Las Vegas",
   // Predictions LOCK at the card's start time (when real odds close). ISO w/ tz.
-  lockTime: "2026-07-11T19:00:00-07:00",
+  lockTime: "2026-07-11T18:00:00-07:00",
   endTime: "2026-07-11T23:00:00-07:00",
   bonusWindows: [
     {
@@ -696,7 +819,7 @@ const _CARD = {
       label: "Live event check-in",
       description: "Visit during the live card and claim this one-time event bonus.",
       amount: 329,
-      startTime: "2026-07-11T19:00:00-07:00",
+      startTime: "2026-07-11T18:00:00-07:00",
       endTime: "2026-07-11T23:00:00-07:00",
     },
     {

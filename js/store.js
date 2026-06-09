@@ -133,8 +133,19 @@
           return true;
         } catch { return false; }
       };
+      const applyGenerated = () => {
+        const generated = window.PKO_GENERATED_CONTENT && window.PKO_GENERATED_CONTENT.oddsSnapshot;
+        if (!generated || generated.eventId !== this.EVENT.id || !generated.matchedBouts) return false;
+        this._applyOddsSnapshot(generated);
+        this.EVENT.oddsSource = "generated";
+        this.EVENT.oddsUpdatedAt = generated.fetchedAt || Date.parse(window.PKO_GENERATED_CONTENT.updatedAt || "");
+        this.EVENT.oddsMatchedBouts = generated.matchedBouts || 0;
+        this.EVENT.oddsStatus = `Using cached difficulty snapshot matched to ${this.EVENT.oddsMatchedBouts}/${this.EVENT.bouts.filter(isPlayableBout).length} playable bouts.`;
+        return true;
+      };
 
       if (!CFG.ODDS_ENABLED || !CFG.ODDS_API_KEY) {
+        if (applyGenerated()) return;
         this.EVENT.oddsSource = "placeholder";
         this.EVENT.oddsStatus = CFG.ODDS_ENABLED ? "Add an external data key to enable card difficulty updates." : "Card difficulty updates disabled.";
         return;
@@ -158,6 +169,7 @@
           this.EVENT.oddsStatus = `Matched ${snapshot.matchedBouts}/${this.EVENT.bouts.filter(isPlayableBout).length} playable bouts from ${snapshot.bookmakers} bookmakers.`;
       } catch (e) {
         if (applyCached()) return;
+        if (applyGenerated()) return;
         this.EVENT.oddsSource = "placeholder";
         this.EVENT.oddsStatus = e.message || "Card difficulty updates unavailable.";
       }
@@ -698,25 +710,30 @@
     },
 
     // ---------- trophies / belts (virtual, zero value) ----------
-    BELTS: { 1:{icon:"🏆",title:"Undisputed Champ"},2:{icon:"🥈",title:"Interim Champ"},
-      3:{icon:"🥉",title:"#1 Contender"},4:{icon:"🎖️",title:"Top Contender"},5:{icon:"🎖️",title:"Ranked Contender"} },
+    BELTS: {
+      1: { icon: "🏆", asset: "assets/ui/belt-undisputed.png", title: "Undisputed Champ" },
+      2: { icon: "🥈", asset: "assets/ui/belt-interim.png", title: "Interim Champ" },
+      3: { icon: "🥉", asset: "assets/ui/belt-contender.png", title: "#1 Contender" },
+      4: { icon: "🎖️", asset: "assets/ui/belt-top-contender.png", title: "Top Contender" },
+      5: { icon: "🎖️", asset: "assets/ui/belt-ranked-contender.png", title: "Ranked Contender" },
+    },
     EVENT_BADGES: {
-      1: { icon: "🥇", title: "Gold Event Badge", material: "Gold" },
-      2: { icon: "🥈", title: "Silver Event Badge", material: "Silver" },
-      3: { icon: "🥉", title: "Bronze Event Badge", material: "Bronze" },
-      4: { icon: "🟤", title: "Copper Event Badge", material: "Copper" },
-      5: { icon: "⚙️", title: "Iron Event Badge", material: "Iron" },
+      1: { icon: "🥇", asset: "assets/ui/badge-gold.png", title: "Gold Event Badge", material: "Gold" },
+      2: { icon: "🥈", asset: "assets/ui/badge-silver.png", title: "Silver Event Badge", material: "Silver" },
+      3: { icon: "🥉", asset: "assets/ui/badge-bronze.png", title: "Bronze Event Badge", material: "Bronze" },
+      4: { icon: "🟤", asset: "assets/ui/badge-copper.png", title: "Copper Event Badge", material: "Copper" },
+      5: { icon: "⚙️", asset: "assets/ui/badge-iron.png", title: "Iron Event Badge", material: "Iron" },
     },
     WEIGHT_BELTS: {
-      "HEAVYWEIGHT": { icon: "🏆", title: "Heavyweight Belt" },
-      "LIGHT HEAVY": { icon: "🏆", title: "Light Heavyweight Belt" },
-      "MIDDLEWEIGHT": { icon: "🏆", title: "Middleweight Belt" },
-      "WELTERWEIGHT": { icon: "🏆", title: "Welterweight Belt" },
-      "LIGHTWEIGHT": { icon: "🏆", title: "Lightweight Belt" },
-      "FEATHERWEIGHT": { icon: "🏆", title: "Featherweight Belt" },
-      "BANTAMWEIGHT": { icon: "🏆", title: "Bantamweight Belt" },
-      "FLYWEIGHT": { icon: "🏆", title: "Flyweight Belt" },
-      "STRAWWEIGHT": { icon: "🏆", title: "Strawweight Belt" },
+      "HEAVYWEIGHT": { icon: "🏆", asset: "assets/ui/belt-division.png", title: "Heavyweight Belt" },
+      "LIGHT HEAVY": { icon: "🏆", asset: "assets/ui/belt-division.png", title: "Light Heavyweight Belt" },
+      "MIDDLEWEIGHT": { icon: "🏆", asset: "assets/ui/belt-division.png", title: "Middleweight Belt" },
+      "WELTERWEIGHT": { icon: "🏆", asset: "assets/ui/belt-division.png", title: "Welterweight Belt" },
+      "LIGHTWEIGHT": { icon: "🏆", asset: "assets/ui/belt-division.png", title: "Lightweight Belt" },
+      "FEATHERWEIGHT": { icon: "🏆", asset: "assets/ui/belt-division.png", title: "Featherweight Belt" },
+      "BANTAMWEIGHT": { icon: "🏆", asset: "assets/ui/belt-division.png", title: "Bantamweight Belt" },
+      "FLYWEIGHT": { icon: "🏆", asset: "assets/ui/belt-division.png", title: "Flyweight Belt" },
+      "STRAWWEIGHT": { icon: "🏆", asset: "assets/ui/belt-division.png", title: "Strawweight Belt" },
     },
 
     async _awardTrophies(eventId) {
@@ -727,21 +744,21 @@
       const add = (t) => { if (!s.trophies.some(x => x.id === t.id)) s.trophies.push(t); };
       // participation badge for everyone who played the card
       add({ id: `${eventId}-played`, season: SEASON, eventId, eventTitle: ev.title,
-        kind: "badge", icon: "🥊", title: "Fought the Card", sub: ev.date.split("·")[0].trim() });
+        kind: "badge", icon: "🥊", asset: "assets/ui/badge-participation.png", title: "Fought the Card", sub: ev.date.split("·")[0].trim() });
       let belt = null;
       if (rank >= 1 && rank <= 5) {
         belt = this.BELTS[rank];
         add({ id: `${eventId}-belt`, season: SEASON, eventId, eventTitle: ev.title,
-          kind: "belt", icon: belt.icon, title: belt.title, sub: `#${rank} · ${ev.title}` });
+          kind: "belt", icon: belt.icon, asset: belt.asset, title: belt.title, sub: `#${rank} · ${ev.title}` });
         const badge = this.EVENT_BADGES[rank];
         add({ id: `${eventId}-place-${rank}`, season: SEASON, eventId, eventTitle: ev.title,
-          kind: "badge", icon: badge.icon, title: badge.title, sub: `${badge.material} · #${rank} for this event` });
+          kind: "badge", icon: badge.icon, asset: badge.asset, title: badge.title, sub: `${badge.material} · #${rank} for this event` });
       }
       if (rank === 1) {
         const division = ev.bouts[0]?.weight || "WELTERWEIGHT";
         const divBelt = this.WEIGHT_BELTS[division] || { icon: "🏆", title: `${division} Belt` };
         add({ id: `${eventId}-${division.toLowerCase().replace(/\s+/g, "-")}-belt`, season: SEASON, eventId, eventTitle: ev.title,
-          kind: "belt", icon: divBelt.icon, title: divBelt.title, sub: `Most points · ${ev.shortTitle}` });
+          kind: "belt", icon: divBelt.icon, asset: divBelt.asset, title: divBelt.title, sub: `Most points · ${ev.shortTitle}` });
       }
       save(s);
       return { rank, belt };
@@ -782,7 +799,7 @@
       const trophies = await this.getTrophies();
       return [...this._membershipItems(), ...trophies].map(t => ({
         id: t.id, kind: t.kind || "award", icon: t.icon || "🎖️", title: t.title || "Award",
-        sub: t.sub || t.eventTitle || "", season: t.season || SEASON,
+        sub: t.sub || t.eventTitle || "", season: t.season || SEASON, asset: t.asset || null,
       }));
     },
     async setShowcaseItem(itemId) {

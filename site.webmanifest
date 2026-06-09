@@ -1,0 +1,19 @@
+{
+  "name": "PKO - Pixel Knockout",
+  "short_name": "PKO",
+  "icons": [
+    {
+      "src": "assets/ui/pko-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/ui/pko-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#1d1745",
+  "background_color": "#0d0b1f",
+  "display": "standalone"
+}

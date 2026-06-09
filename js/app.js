@@ -13,6 +13,36 @@
     const inner = f.img ? `<img src="${esc(f.img)}" alt="${esc(f.name)}" />` : (f.emoji || "🥊");
     return `<div class="avatar ${extra}" style="background:${f.color}">${inner}</div>`;
   };
+  const UI_ART = {
+    empty: "assets/ui/empty-state-arcade.png",
+    shareBg: "assets/ui/share-card-bg.png",
+    fallbackBadge: "assets/ui/badge-participation.png",
+    fallbackBelt: "assets/ui/belt-division.png",
+  };
+  const rewardAsset = item => {
+    const title = String(item?.title || "").toLowerCase();
+    if (item?.asset) return item.asset;
+    if (title.includes("undisputed")) return "assets/ui/belt-undisputed.png";
+    if (title.includes("interim")) return "assets/ui/belt-interim.png";
+    if (title.includes("#1 contender")) return "assets/ui/belt-contender.png";
+    if (title.includes("top contender")) return "assets/ui/belt-top-contender.png";
+    if (title.includes("ranked contender")) return "assets/ui/belt-ranked-contender.png";
+    if (title.includes("belt")) return UI_ART.fallbackBelt;
+    if (title.includes("gold")) return "assets/ui/badge-gold.png";
+    if (title.includes("silver")) return "assets/ui/badge-silver.png";
+    if (title.includes("bronze")) return "assets/ui/badge-bronze.png";
+    if (title.includes("copper")) return "assets/ui/badge-copper.png";
+    if (title.includes("iron")) return "assets/ui/badge-iron.png";
+    if (title.includes("fought the card")) return "assets/ui/badge-participation.png";
+    return null;
+  };
+  const rewardArtHTML = (item, cls = "reward-art") => {
+    const asset = rewardAsset(item);
+    return asset
+      ? `<img class="${cls}" src="${esc(asset)}" alt="${esc(item?.title || "Reward")}" loading="lazy" />`
+      : `<span class="${cls} text">${esc(item?.icon || "PKO")}</span>`;
+  };
+  const emptyArtHTML = text => `<div class="empty-state with-art"><img src="${esc(UI_ART.empty)}" alt="" loading="lazy" /><span>${esc(text)}</span></div>`;
   const flagSlug = country => {
     const key = String(country || "Parts Unknown").toLowerCase();
     const map = {
@@ -42,6 +72,7 @@
   let leaderboardMode = "overall";
   let adminQuery = "";
   let adminSelectedUserId = null;
+  const gatedStaticViews = {};
   const isPlayableBout = b => b.playable !== false && (b.cardSection || "main") === "main";
   const playableBouts = () => EVENT.bouts.filter(isPlayableBout);
   const scheduleOnlyBouts = () => EVENT.bouts.filter(b => !isPlayableBout(b));
@@ -109,6 +140,8 @@
     if (resolved === "roster") renderRoster();
     if (resolved === "legends") renderLegends();
     if (resolved === "admin") renderAdminResults();
+    if (resolved === "priorities") renderPriorities();
+    if (resolved === "ops") renderOps();
     if (resolved === "season") {
       const el = $("#season-current");
       if (el) el.textContent = CFG.CURRENT_SEASON;
@@ -116,6 +149,28 @@
   }
   $$("[data-route]").forEach(l => l.addEventListener("click", e => { e.preventDefault(); route(l.dataset.route); }));
   window.addEventListener("hashchange", () => route((window.location.hash || "#play").slice(1), { skipHash: true }));
+
+  async function renderPriorities() {
+    const view = $("#view-priorities");
+    if (!view) return;
+    gatedStaticViews.priorities = gatedStaticViews.priorities || view.innerHTML;
+    if (await store.isAdmin()) {
+      view.innerHTML = gatedStaticViews.priorities;
+      return;
+    }
+    view.innerHTML = `<p class="kicker">ADMIN ONLY</p><h1>Priorities</h1><div class="empty-state">This internal roadmap is available only to approved admins.</div>`;
+  }
+
+  async function renderOps() {
+    const view = $("#view-ops");
+    if (!view) return;
+    gatedStaticViews.ops = gatedStaticViews.ops || view.innerHTML;
+    if (await store.isAdmin()) {
+      view.innerHTML = gatedStaticViews.ops;
+      return;
+    }
+    view.innerHTML = `<p class="kicker">ADMIN ONLY</p><h1>Operator Notes</h1><div class="empty-state">Operator notes are available only to approved admins.</div>`;
+  }
 
   // ---------- account box ----------
   function renderAccount() {
@@ -135,6 +190,7 @@
   // ---------- play view ----------
   function oddsSourceLabel() {
     if (EVENT.oddsSource === "live") return "card difficulty updated";
+    if (EVENT.oddsSource === "generated") return "cached card difficulty";
     if (EVENT.oddsSource === "cached") return "card difficulty ready";
     if (EVENT.oddsSource === "placeholder") return "default card difficulty";
     return "card difficulty ready";
@@ -162,7 +218,7 @@
 
     const wrap = $("#bouts"); wrap.innerHTML = "";
     if (playableBouts().length) {
-      wrap.insertAdjacentHTML("beforeend", `<div class="card-section-label"><p class="kicker">MAIN CARD PICKS</p><h2>Playable matchups</h2><p class="muted small">Only selected main-card bouts use Glory Points and count toward the event leaderboard.</p></div>`);
+      wrap.insertAdjacentHTML("beforeend", `<div class="card-section-label"><p class="kicker">SELECTED MAIN CARD</p><h2>Playable matchups</h2><p class="muted small">Only selected main-card bouts use Glory Points and count toward the event leaderboard.</p></div>`);
       playableBouts().forEach(b => wrap.appendChild(renderBout(b, existing[b.id], locked)));
     }
     if (scheduleOnlyBouts().length) {
@@ -561,8 +617,7 @@
       <div><span class="bank-label">CARD RISK</span><strong>${pct}%</strong></div>`;
   }
 
-  $("#submit-picks").onclick = async () => {
-    if (!store.user || !store.user.nameChosen) { openAuth(); return; }
+  function buildDraftPicks() {
     const picks = [];
     for (const b of playableBouts()) {
       const d = draft[b.id];
@@ -571,12 +626,44 @@
         picks.push({ boutId: b.id, pick: d.pick, stake: d.stake, multiplier: +mult(odds).toFixed(4) });
       }
     }
+    return picks;
+  }
+
+  function closeLockConfirm() {
+    $("#lock-confirm-modal").classList.add("hidden");
+  }
+
+  function openLockConfirm(picks) {
+    const picked = new Set(picks.map(p => p.boutId));
+    const missing = playableBouts().filter(b => !picked.has(b.id));
+    $("#lock-confirm-body").innerHTML = missing.length
+      ? `<strong>Unpicked main-card matchups</strong><ul>${missing.map(b => `<li>${esc(b.a.real)} vs ${esc(b.b.real)}</li>`).join("")}</ul>`
+      : `<strong>All playable main-card matchups have picks.</strong>`;
+    $("#lock-confirm-modal").classList.remove("hidden");
+  }
+
+  async function submitDraftPicks() {
+    const picks = buildDraftPicks();
     if (!picks.length) { $("#play-msg").textContent = "Pick at least one winner and set points."; return; }
     try { await store.submitPicks(EVENT.id, picks);
-      $("#play-msg").textContent = "Locked in! Difficulty multipliers are frozen on your picks. Good luck 🥊";
+      closeLockConfirm();
+      $("#play-msg").textContent = "Locked in! Difficulty multipliers are frozen on your picks. Good luck PKO";
       draft = {}; renderPlay();
-    } catch (e) { $("#play-msg").textContent = "⚠ " + e.message; }
+    } catch (e) { $("#play-msg").textContent = "Warning " + e.message; }
+  }
+
+  $("#submit-picks").onclick = async () => {
+    if (!store.user || !store.user.nameChosen) { openAuth(); return; }
+    const picks = buildDraftPicks();
+    if (!picks.length) { $("#play-msg").textContent = "Pick at least one winner and set points."; return; }
+    if (picks.length < playableBouts().length) { openLockConfirm(picks); return; }
+    await submitDraftPicks();
   };
+
+  $("#lock-confirm-close").onclick = closeLockConfirm;
+  $("#lock-confirm-no").onclick = closeLockConfirm;
+  $("#lock-confirm-modal").addEventListener("click", e => { if (e.target.id === "lock-confirm-modal") closeLockConfirm(); });
+  $("#lock-confirm-yes").onclick = submitDraftPicks;
 
   // ---------- leaderboard ----------
   async function renderLeaderboard() {
@@ -589,7 +676,7 @@
     const list = $("#leaderboard-list"); list.innerHTML = "";
     const note = $("#leaderboard-note");
     if (!rows.length) {
-      list.innerHTML = `<li class="empty-state">No leaderboard entries yet. Sign in, choose a fighter name, and lock predictions for the current card.</li>`;
+      list.innerHTML = `<li>${emptyArtHTML("No leaderboard entries yet. Sign in, choose a fighter name, and lock predictions for the current card.")}</li>`;
       if (note) note.textContent = "";
       return;
     }
@@ -607,7 +694,7 @@
 
   function overallLeaderboardRow(r, rank, belt) {
     return `<span class="lb-rank">#${rank}</span>
-      <span class="lb-belt">${belt ? belt.icon : ""}</span>
+      <span class="lb-belt">${belt ? rewardArtHTML(belt, "lb-reward-art") : ""}</span>
       <span class="lb-showcase" title="${esc(r.showcaseTitle || "No shrine item selected")}">${r.showcaseIcon ? esc(r.showcaseIcon) : ""}</span>
       <span class="lb-name">${esc(r.name)}${belt ? `<span class="lb-title">${belt.title}</span>` : ""}</span>
       <span class="lb-pts">${r.points} pts</span>`;
@@ -690,9 +777,29 @@
     } catch {}
   }
 
+  function getGeneratedUpcomingEvents() {
+    const generated = window.PKO_GENERATED_CONTENT || {};
+    const rows = Array.isArray(generated.upcomingEvents) ? generated.upcomingEvents : [];
+    if (!rows.length) return null;
+    const pulledAt = generated.updatedAt ? new Date(generated.updatedAt) : new Date();
+    const events = rows.map(ev => ({
+      event: ev.event,
+      date: ev.date,
+      venue: ev.venue,
+      location: ev.location,
+      parsed: ev.parsed ? new Date(ev.parsed) : parseEventDate(ev.date),
+      sourceUrl: ev.sourceUrl,
+    })).filter(ev => ev.event && ev.date);
+    events.pulledAt = pulledAt;
+    events.generated = true;
+    return events;
+  }
+
   async function fetchUpcomingEvents() {
     const cached = getCachedUpcomingEvents();
     if (cached) return cached;
+    const generated = getGeneratedUpcomingEvents();
+    if (generated) return generated;
 
     const url = "https://en.wikipedia.org/w/api.php?action=parse&page=List_of_UFC_events&prop=text&format=json&origin=*";
     const data = await (await fetch(url)).json();
@@ -724,7 +831,7 @@
     list.innerHTML = "";
     const pulled = formatPulledAt(pulledAt);
     if (!events.length) {
-      list.innerHTML = `<div class="empty-state">No upcoming events are available right now. Check UFC.com or try again later.</div>`;
+      list.innerHTML = emptyArtHTML("No upcoming events are available right now. Check UFC.com or try again later.");
       $("#events-source").innerHTML = `${esc(source)} · <a href="https://www.ufc.com/events" target="_blank" rel="noopener">UFC.com backup</a>`;
       return;
     }
@@ -745,7 +852,7 @@
     try {
       const events = await fetchUpcomingEvents();
       const source = events.length
-        ? (events.stale ? "Cached schedule; verify against UFC.com" : "Live schedule")
+        ? (events.generated ? "Automated schedule cache; verify against UFC.com" : events.stale ? "Cached schedule; verify against UFC.com" : "Live schedule")
         : "Fallback schedule; verify against UFC.com";
       renderEventCards(
         events.length ? events : EVENT_FALLBACK.slice(0, UPCOMING_EVENT_LIMIT),
@@ -767,9 +874,13 @@
 
   function renderRoster() {
     const body = $("#roster-body");
+    const rankingEl = $("#rankings-updated");
+    if (rankingEl && window.PKO_GENERATED_CONTENT?.rankingsUpdated) {
+      rankingEl.textContent = window.PKO_GENERATED_CONTENT.rankingsUpdated;
+    }
     const rows = (window.PKO_allRosterFighters ? window.PKO_allRosterFighters() : []);
     if (!rows.length) {
-      body.innerHTML = `<div class="empty-state">No roster entries yet.</div>`;
+      body.innerHTML = emptyArtHTML("No roster entries yet.");
       return;
     }
 
@@ -797,14 +908,35 @@
           </div>`).join("")}
         </div>
       </section>
-    `).join("");
+    `).join("") + renderRingCrew();
+  }
+
+  function renderRingCrew() {
+    const crew = window.PKO_RING_CREW || [];
+    if (!crew.length) return "";
+    return `<section class="roster-division corner-crew">
+      <h2>PKO Corner Crew</h2>
+      <p class="muted small">Non-fighter arcade characters use real/public names only as factual references. The pixel art and alternate names are original PKO characters.</p>
+      <div class="roster-table corner-crew-table">
+        <div class="roster-row roster-head">
+          <span>Sprite</span><span>Real / reference name</span><span>PKO alternate name</span><span>Role</span><span>Use note</span>
+        </div>
+        ${crew.map(c => `<div class="roster-row">
+          <span class="roster-sprite"><img src="${esc(c.img)}" alt="${esc(c.pixelName)} pixel presenter" loading="lazy" /></span>
+          <span>${esc(c.realName)}</span>
+          <span class="pixel-name">${esc(c.pixelName)}</span>
+          <span>${esc(c.role)}</span>
+          <span>${esc(c.note)}</span>
+        </div>`).join("")}
+      </div>
+    </section>`;
   }
 
   function renderLegends() {
     const body = $("#legends-body");
     const legends = window.PKO_LEGENDS || [];
     if (!legends.length) {
-      body.innerHTML = `<div class="empty-state">No legends have been added yet.</div>`;
+      body.innerHTML = emptyArtHTML("No legends have been added yet.");
       return;
     }
     body.innerHTML = legends.map(l => `
@@ -831,7 +963,7 @@
     if (!body) return;
     const allowed = await store.isAdmin();
     if (!allowed) {
-      body.innerHTML = `<div class="empty-state">Admin result tools are locked. Sign in with an approved admin email to enter official fight outcomes.</div>
+      body.innerHTML = `${emptyArtHTML("Admin result tools are locked. Sign in with an approved admin email to enter official fight outcomes.")}
         <div class="source-panel">
           <p><strong>How settlement works:</strong> Results are entered manually from official post-fight sources. The Supabase RPC checks the signed-in admin email before it changes points.</p>
           <p class="small muted">Admin email allowlist is stored in Supabase. Do not rely on the public config alone for write access.</p>
@@ -897,7 +1029,7 @@
     if (!body) return;
     const allowed = await store.isAdmin();
     if (!allowed) {
-      body.innerHTML = `<div class="empty-state">Admin tools are locked. Sign in with an approved admin email to manage players, rewards, points, and official fight outcomes.</div>
+      body.innerHTML = `${emptyArtHTML("Admin tools are locked. Sign in with an approved admin email to manage players, rewards, points, and official fight outcomes.")}
         <div class="source-panel">
           <p><strong>How admin writes work:</strong> Supabase RPCs check the signed-in admin email before changing player state.</p>
           <p class="small muted">Admin email allowlist is stored in Supabase. Do not rely on public config alone for write access.</p>
@@ -926,7 +1058,7 @@
     body.innerHTML = `<div class="source-panel">
       <p><strong>${esc(EVENT.shortTitle || EVENT.title)}</strong></p>
       <p class="small muted">${settled}/${EVENT.bouts.length} fights have official/manual outcomes. Last viewed ${esc(formatStatusTimestamp())}.</p>
-      <p class="small muted">Admin writes go through server RPCs and are recorded in the audit log. Use a clear reason for every moderation, point, and reward change.</p>
+      <p class="small muted">Admin writes go through server RPCs and are recorded in the audit log. Use a clear reason for every moderation, point, and reward change. <a href="#ops" data-route="ops">Open operator notes</a>.</p>
     </div>
     <section class="admin-section">
       <div class="section-head"><div><p class="kicker">PLAYER ADMIN</p><h2>Profiles, points, rewards</h2></div></div>
@@ -937,11 +1069,11 @@
             <button id="admin-player-search" class="btn btn-ghost">Search</button>
           </div>
           <div class="admin-player-list">
-            ${players.length ? players.map(p => adminPlayerRowHTML(p, p.id === adminSelectedUserId)).join("") : `<div class="empty-state">No matching players.</div>`}
+            ${players.length ? players.map(p => adminPlayerRowHTML(p, p.id === adminSelectedUserId)).join("") : emptyArtHTML("No matching players.")}
           </div>
         </div>
         <div id="admin-selected-player">
-          ${selected ? adminSelectedPlayerHTML(selected, trophies) : `<div class="empty-state">Select a player to manage.</div>`}
+          ${selected ? adminSelectedPlayerHTML(selected, trophies) : emptyArtHTML("Select a player to manage.")}
         </div>
       </div>
       <p id="admin-player-msg" class="auth-msg"></p>
@@ -1006,15 +1138,15 @@
       <h3>Rewards</h3>
       <div class="admin-trophy-list">
         ${trophies.length ? trophies.map(t => `<div class="admin-trophy-row">
-          <span>${esc(t.icon || "PKO")}</span><strong>${esc(t.title || "Reward")}</strong><em>${esc(t.kind || "award")}</em>
+          <span>${rewardArtHTML(t, "admin-reward-art")}</span><strong>${esc(t.title || "Reward")}</strong><em>${esc(t.kind || "award")}</em>
           <button class="btn btn-ghost admin-revoke-trophy" data-trophy="${esc(t.id)}">Revoke</button>
-        </div>`).join("") : `<div class="empty-state">No manual rewards yet.</div>`}
+        </div>`).join("") : emptyArtHTML("No manual rewards yet.")}
       </div>
     </div>`;
   }
 
   function adminAuditHTML(rows) {
-    if (!rows.length) return `<div class="empty-state">No admin changes recorded yet.</div>`;
+    if (!rows.length) return emptyArtHTML("No admin changes recorded yet.");
     return rows.map(r => {
       const when = r.createdAt ? new Date(r.createdAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "";
       return `<article class="admin-audit-row">
@@ -1175,7 +1307,7 @@
   async function renderProfile() {
     const body = $("#profile-body");
     if (!store.user || !store.user.nameChosen) {
-      body.innerHTML = `<h1>Profile</h1><div class="empty-state">Sign in to claim your fighter name, track Glory Points, view point history, and build a shrine of virtual badges and belts.</div>
+      body.innerHTML = `<h1>Profile</h1>${emptyArtHTML("Sign in to claim your fighter name, track Glory Points, view point history, and build a shrine of virtual badges and belts.")}
         <button class="btn btn-primary" id="p-signin">Sign in</button>`;
       $("#p-signin").onclick = openAuth; return;
     }
@@ -1185,8 +1317,9 @@
     const shrineItems = await store.getShrineItems();
     const history = await store.getPointHistory(30);
     const shelf = renderShrineItems(shrineItems);
+    const showcaseItem = { icon: store.user.showcaseIcon, title: store.user.showcaseTitle };
     const showcase = store.user.showcaseIcon
-      ? `<div class="showcase-big" title="${esc(store.user.showcaseTitle || "Showcase item")}">${esc(store.user.showcaseIcon)}</div>`
+      ? `<div class="showcase-big" title="${esc(store.user.showcaseTitle || "Showcase item")}">${rewardArtHTML(showcaseItem, "showcase-art")}</div>`
       : `<div class="showcase-big empty">?</div>`;
     body.innerHTML = `
       <div class="profile-head">
@@ -1220,11 +1353,11 @@
   }
 
   function renderShrineItems(items) {
-    if (!items.length) return `<div class="empty-state">No shrine items yet. Play a card to earn participation badges, event-placement badges, and virtual belts.</div>`;
+    if (!items.length) return emptyArtHTML("No shrine items yet. Play a card to earn participation badges, event-placement badges, and virtual belts.");
     return items.map(t => {
       const picked = store.user && store.user.showcaseItemId === t.id;
       return `<div class="trophy ${esc(t.kind)} ${picked ? "selected" : ""}">
-        <div class="trophy-ico">${esc(t.icon)}</div>
+        <div class="trophy-ico">${rewardArtHTML(t, "trophy-art")}</div>
         <div class="trophy-title">${esc(t.title)}</div>
         <div class="trophy-sub">${esc(t.sub || "")}</div>
         <div class="trophy-season">Season ${esc(t.season || CFG.CURRENT_SEASON)}</div>
@@ -1234,7 +1367,7 @@
   }
 
   function renderPointHistory(history) {
-    if (!history.length) return `<div class="empty-state">No point history yet. Signup grants, event grants, prediction stakes, refunds, wins, and live bonuses will appear here.</div>`;
+    if (!history.length) return emptyArtHTML("No point history yet. Signup grants, event grants, prediction stakes, refunds, wins, and live bonuses will appear here.");
     return history.map(h => {
       const amount = Number(h.amount) || 0;
       const sign = amount > 0 ? "+" : "";
@@ -1369,6 +1502,19 @@
 
   // ---------- share card ----------
   const SITE = "pixelknockout.com";
+  const imageCache = new Map();
+  function loadCanvasImage(src) {
+    if (!src) return Promise.resolve(null);
+    if (imageCache.has(src)) return imageCache.get(src);
+    const promise = new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+    imageCache.set(src, promise);
+    return promise;
+  }
   async function buildShareData() {
     const rec = await store.getEventRecord(EVENT.id);
     const rows = await store.getLeaderboard();
@@ -1377,14 +1523,17 @@
     return { rec, rank, pts, name: store.user ? store.user.name : "Fighter" };
   }
 
-  function drawShareCard(d) {
+  async function drawShareCard(d) {
     const c = $("#share-canvas"), x = c.getContext("2d");
     const W = c.width, H = c.height;
-    // background
-    const g = x.createLinearGradient(0, 0, W, H);
-    g.addColorStop(0, "#1d1745"); g.addColorStop(1, "#0d0b1f");
-    x.fillStyle = g; x.fillRect(0, 0, W, H);
-    x.strokeStyle = "#ffd34d"; x.lineWidth = 6; x.strokeRect(8, 8, W - 16, H - 16);
+    const bg = await loadCanvasImage(UI_ART.shareBg);
+    if (bg) x.drawImage(bg, 0, 0, W, H);
+    else {
+      const g = x.createLinearGradient(0, 0, W, H);
+      g.addColorStop(0, "#1d1745"); g.addColorStop(1, "#0d0b1f");
+      x.fillStyle = g; x.fillRect(0, 0, W, H);
+      x.strokeStyle = "#ffd34d"; x.lineWidth = 6; x.strokeRect(8, 8, W - 16, H - 16);
+    }
     x.textAlign = "left";
     // logo
     x.fillStyle = "#ffd34d"; x.font = "32px 'Press Start 2P', monospace";
@@ -1404,8 +1553,13 @@
     x.fillText(`RANK #${d.rank > 0 ? d.rank : "?"}  ·  ${d.pts} GLORY PTS`, 34, 248);
     // belt
     const belt = store.BELTS[d.rank];
-    x.font = "40px serif"; x.textAlign = "right";
-    x.fillText(belt ? belt.icon : "🥊", W - 40, 150);
+    const beltImg = await loadCanvasImage(belt && belt.asset);
+    if (beltImg) x.drawImage(beltImg, W - 132, 96, 92, 92);
+    else {
+      x.font = "40px serif"; x.textAlign = "right";
+      x.fillText(belt ? belt.icon : "🥊", W - 40, 150);
+    }
+    x.textAlign = "right";
     if (belt) { x.fillStyle = "#ffd34d"; x.font = "10px 'Press Start 2P', monospace";
       x.fillText(belt.title, W - 40, 180); }
     // footer
@@ -1424,7 +1578,7 @@
     $("#share-modal").classList.remove("hidden");
     // fonts may need a tick to be ready for canvas
     if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch {} }
-    drawShareCard(d);
+    await drawShareCard(d);
     $("#share-msg").textContent = "";
   }
   function closeShare() { $("#share-modal").classList.add("hidden"); }

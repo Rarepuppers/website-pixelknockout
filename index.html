@@ -5,6 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PKO — Pixel Knockout</title>
   <meta name="description" content="Pixel Knockout (PKO): a free MMA prediction game. Predict which pixel fighter wins, earn Glory Points, and climb the leaderboard. Just internet points — no purchases, no cash-out." />
+  <meta property="og:title" content="PKO — Pixel Knockout" />
+  <meta property="og:description" content="Free MMA prediction game with Glory Points, virtual belts, and zero cash-out." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://pixelknockout.com/" />
+  <meta property="og:image" content="https://pixelknockout.com/assets/ui/og-preview.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="PKO — Pixel Knockout" />
+  <meta name="twitter:description" content="Free MMA prediction game with Glory Points, virtual belts, and zero cash-out." />
+  <meta name="twitter:image" content="https://pixelknockout.com/assets/ui/og-preview.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/ui/pko-icon-32.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="assets/ui/pko-icon-192.png" />
+  <link rel="manifest" href="site.webmanifest" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
@@ -26,6 +40,7 @@
       <a href="#roster" data-route="roster" class="nav-link">Fighters</a>
       <a href="#profile" data-route="profile" class="nav-link">Profile</a>
       <a href="#rules" data-route="rules" class="nav-link">Rules</a>
+      <a href="#faq" data-route="faq" class="nav-link">FAQ</a>
       <a href="#support" data-route="support" class="nav-link">Support</a>
     </nav>
 
@@ -39,7 +54,7 @@
     <section id="view-play" class="view">
       <div class="event-head">
         <div>
-          <p class="kicker">CURRENT EVENT CARD</p>
+          <p class="kicker">SELECTED MAIN CARD</p>
           <h1 id="event-title">—</h1>
           <p id="event-date" class="muted"></p>
           <p id="event-real" class="small muted"></p>
@@ -154,8 +169,46 @@
         <p>PKO has no paid entry, no cash-out, no transferable points, and no prize of monetary or material value. Points, badges, belts, and shrine items cannot be bought, sold, traded, transferred, or redeemed.</p>
       </div>
       <div class="rules-grid">
-        <div class="rule-block"><h2>More pages</h2><p><a href="#season" data-route="season">Season format</a> keeps the yearly reset details. <a href="#fairplay" data-route="fairplay">Fair Play</a> covers account and naming rules.</p></div>
+        <div class="rule-block"><h2>More pages</h2><p><a href="#season" data-route="season">Season format</a> keeps the yearly reset details. <a href="#fairplay" data-route="fairplay">Fair Play</a> covers account and naming rules. <a href="#faq" data-route="faq">FAQ</a> shows scoring examples.</p></div>
         <div class="rule-block"><h2>Site notes</h2><p><a href="#about" data-route="about">About PKO</a> explains the parody/fan-game positioning. <a href="#priorities" data-route="priorities">Priorities</a> shows the launch roadmap.</p></div>
+      </div>
+    </section>
+
+    <!-- ============ FAQ VIEW ============ -->
+    <section id="view-faq" class="view hidden">
+      <p class="kicker">POINTS AND SCORING</p>
+      <h1>FAQ</h1>
+      <div class="rules-grid">
+        <div class="rule-block">
+          <h2>Is this gambling?</h2>
+          <p>No. PKO is a free prediction game. Glory Points are made-up internet points with zero monetary value. They cannot be bought, sold, transferred, redeemed, or cashed out.</p>
+        </div>
+        <div class="rule-block">
+          <h2>Can I buy points?</h2>
+          <p>No. Everyone gets the same free event grant. Optional tips support development only and never affect points, rank, picks, badges, belts, or rewards.</p>
+        </div>
+        <div class="rule-block">
+          <h2>Why selected main card only?</h2>
+          <p>Main-card matchups are easier for casual players to follow and usually have better public data. Undercard matchups can still appear as schedule context, but they do not use Glory Points.</p>
+        </div>
+        <div class="rule-block">
+          <h2>Where does card difficulty come from?</h2>
+          <p>PKO can use an automated server-side cache from public schedule data and optional external difficulty pricing. If that cache is missing, the app uses the built-in fallback values and says so.</p>
+        </div>
+      </div>
+      <div class="free-points">
+        <h2>Scoring examples</h2>
+        <ul>
+          <li>Commit 100 points at 1.50x and pick correctly: 150 points return to your balance.</li>
+          <li>Commit 100 points at 2.40x and pick correctly: 240 points return to your balance.</li>
+          <li>Commit 100 points and miss: those 100 points are not returned.</li>
+          <li>Commit 100 points and the bout is cancelled, voided, or ruled a draw/no contest for PKO scoring: the 100 points are refunded.</li>
+          <li>Skip a playable matchup: no points move and it does not count as a correct pick.</li>
+        </ul>
+      </div>
+      <div class="rules-grid">
+        <div class="rule-block"><h2>Name moderation</h2><p>Filters catch obvious problems, but admins can reset names that bypass the filter, impersonate people, or violate Fair Play.</p></div>
+        <div class="rule-block"><h2>Corrections</h2><p>If an official result changes after settlement, admins can correct points and award history through the admin tools and audit log.</p></div>
       </div>
     </section>
 
@@ -257,6 +310,18 @@
       <div id="admin-results-body"><!-- rendered by app.js --></div>
     </section>
 
+    <!-- ============ OPERATOR DOCS VIEW ============ -->
+    <section id="view-ops" class="view hidden">
+      <p class="kicker">ADMIN ONLY</p>
+      <h1>Operator Notes</h1>
+      <div class="rules-grid">
+        <div class="rule-block"><h2>Before lock</h2><p>Verify the selected main-card matchups, lock time, event grant, and bonus windows against UFC.com. Confirm undercard rows are marked as schedule-only.</p></div>
+        <div class="rule-block"><h2>During the card</h2><p>Settle playable main-card bouts one at a time after the official result is clear. Use cancelled/draw/no-contest only when PKO should refund committed points.</p></div>
+        <div class="rule-block"><h2>After final bout</h2><p>Confirm the event leaderboard, top-five event awards, and shrine items. Spot-check a few player histories before sharing results publicly.</p></div>
+        <div class="rule-block"><h2>Corrections</h2><p>Use point adjustments and manual awards for overturned results, admin mistakes, or moderation outcomes. Every change should leave an audit-log reason.</p></div>
+      </div>
+    </section>
+
     <!-- ============ HOW IT WORKS VIEW ============ -->
     <section id="view-how" class="view hidden">
       <h1>How PKO works</h1>
@@ -330,6 +395,18 @@
     </div>
   </div>
 
+  <!-- ============ LOCK CONFIRM MODAL ============ -->
+  <div id="lock-confirm-modal" class="modal hidden">
+    <div class="modal-box">
+      <button class="modal-close" id="lock-confirm-close">x</button>
+      <h2>Lock main-card picks?</h2>
+      <p class="muted">Unpicked playable matchups will stay empty after you lock this card.</p>
+      <div id="lock-confirm-body" class="empty-state"></div>
+      <button id="lock-confirm-yes" class="btn btn-primary">Lock selected picks</button>
+      <button id="lock-confirm-no" class="btn btn-ghost">Keep editing</button>
+    </div>
+  </div>
+
   <!-- ============ USERNAME MODAL ============ -->
   <div id="name-modal" class="modal hidden">
     <div class="modal-box">
@@ -367,6 +444,7 @@
   </footer>
 
   <script src="js/config.js?v=8"></script>
+  <script src="js/generated-content.js?v=8"></script>
   <script src="js/data.js?v=8"></script>
   <script src="js/store.js?v=8"></script>
   <script src="js/app.js?v=8"></script>

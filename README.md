@@ -48,23 +48,58 @@ API key in frontend code. Send campaigns from Brevo only for major cards, about
 subscribers; Brevo owns consent, double opt-in, unsubscribe, and sending.
 
 ## Difficulty data
-Set `ODDS_ENABLED: true` and add `ODDS_API_KEY` in `js/config.js` to pull MMA H2H
-prices from The Odds API. The app matches each bout by fighter names, uses the
-median American price across available bookmakers, and caches the snapshot for
-`ODDS_CACHE_MINUTES`. If no match is found, the baked-in placeholder odds remain
-and the Play screen says so.
+For production, set the GitHub Secret `ODDS_API_KEY` and let the scheduled
+content-refresh workflow build the public `js/generated-content.js` snapshot.
+The app matches each bout by fighter names, uses the median American price across
+available bookmakers, and caches the matched snapshot. If no match is found, the
+baked-in placeholder odds remain and the Play screen says so.
+
+For local-only development, `js/config.js` still supports `ODDS_ENABLED: true`
+with `ODDS_API_KEY`, but that exposes the key to the browser and should not be
+used on the public site.
 
 Because this is a static site, a key placed in `js/config.js` is visible to users.
-For production, prefer a Supabase Edge Function proxy that stores the odds key as
-a server secret and returns only the matched odds snapshot.
+For production, prefer the included GitHub Action cache or a Supabase Edge
+Function proxy that stores the odds key as a server secret and returns only the
+matched odds snapshot.
+
+## Automated content refresh
+`scripts/refresh-content-cache.mjs` builds `js/generated-content.js` from public
+schedule data and, when available, a server-side odds snapshot. The browser reads
+that generated file first, then falls back to visitor-local cache and public
+schedule fetches if needed.
+
+GitHub Actions workflow:
+
+```text
+.github/workflows/pixelknockout-content-refresh.yml
+```
+
+Repository secret:
+
+```text
+ODDS_API_KEY
+```
+
+The workflow runs every six hours and can also be triggered manually from
+Actions. It commits only generated cache files:
+
+```text
+website-pixelknockout/js/generated-content.js
+website-pixelknockout/content/content-refresh-log.md
+```
+
+Do not store Supabase service-role keys, Brevo API keys, or sports-data API keys
+in frontend JavaScript. GitHub Secrets are safe for this build-time cache because
+only the matched public snapshot is committed.
 
 ## Upcoming event schedule
-The Events page pulls the next two upcoming UFC events from Wikipedia's scheduled
-events table and caches the result in the visitor's browser for
-`EVENTS_CACHE_MINUTES` (30 minutes by default). If Wikipedia is temporarily
-unavailable, the page falls back to the last cached schedule before using the
-baked-in fallback list. This is client-side cache only; use a small server cache
-or GitHub Action if you later need one shared schedule snapshot for every visitor.
+The Events page first uses `js/generated-content.js`, refreshed by GitHub Actions.
+If that file is empty or stale, the page pulls the next two upcoming UFC events
+from Wikipedia's scheduled events table and caches the result in the visitor's
+browser for `EVENTS_CACHE_MINUTES` (30 minutes by default). If Wikipedia is
+temporarily unavailable, the page falls back to the last cached schedule before
+using the baked-in fallback list.
 
 ## Event leaderboard and results
 PKO has two leaderboard surfaces: the overall season leaderboard and a current
@@ -76,6 +111,10 @@ and updates the event leaderboard. Use UFC.com results, UFCStats completed
 events, or the event's Wikipedia page as the human verification source before
 pressing settle. The Odds API is for card difficulty/pricing data, not official
 results, and scraping Google is not a reliable production result feed.
+
+Operator notes live at `#ops` and are admin-gated in the UI. They cover the
+pre-lock card check, one-bout-at-a-time settlement, post-event award review, and
+correction workflow for overturned results or admin mistakes.
 
 ## Deploy
 Static site - publish this repository root on GitHub Pages, Vercel, or Netlify,
@@ -102,9 +141,10 @@ then point `pixelknockout.com` at it.
 - Supabase Auth: add the production Site URL and redirect URL.
 - Supabase SQL: re-run `supabase/schema.sql` after schema edits.
 - Admin settlement: confirm `admin_emails` contains your admin login email before settling real fights.
+- Admin content: review `#ops` before each event and keep audit-log reasons clear.
 - Event bonuses: keep `event_bonus_windows` in `supabase/schema.sql` aligned with `PKO_EVENT.bonusWindows` in `js/data.js`.
 - Demo settlement: keep `ENABLE_DEMO_SETTLEMENT` false in production.
-- Difficulty data: add `ODDS_API_KEY` or proxy the feed through a Supabase Edge Function.
+- Difficulty data: add the GitHub Secret `ODDS_API_KEY` for the scheduled cache, or proxy the feed through a Supabase Edge Function.
 - Rankings: refresh `PKO_RANKINGS` from UFC.com before/after major cards; use Wikipedia as backup if the official page blocks.
 - Legends: refresh `PKO_LEGENDS` records/facts from official UFC profiles, UFCStats, Sherdog/Tapology, or Wikipedia before using the archive as a public stats reference.
 - Assets: convert fighter art to transparent 128×128 PNG sprites before wiring `img` paths.
