@@ -1,5 +1,5 @@
 window.PKO_GENERATED_CONTENT = {
-  "updatedAt": "2026-06-09T02:17:51.371Z",
+  "updatedAt": "2026-06-09T15:26:39.668Z",
   "rankingsUpdated": "June 2, 2026",
   "upcomingEvents": [
     {
@@ -7,7 +7,7 @@ window.PKO_GENERATED_CONTENT = {
       "date": "Jun 14, 2026",
       "venue": "White House",
       "location": "Washington, D.C. , U.S.",
-      "parsed": "2026-06-13T14:00:00.000Z",
+      "parsed": "2026-06-14T00:00:00.000Z",
       "sourceUrl": "https://en.wikipedia.org/wiki/List_of_UFC_events"
     },
     {
@@ -15,14 +15,34 @@ window.PKO_GENERATED_CONTENT = {
       "date": "Jun 20, 2026",
       "venue": "Meta Apex",
       "location": "Las Vegas , Nevada , U.S.",
-      "parsed": "2026-06-19T14:00:00.000Z",
+      "parsed": "2026-06-20T00:00:00.000Z",
       "sourceUrl": "https://en.wikipedia.org/wiki/List_of_UFC_events"
     }
   ],
-  "oddsSnapshot": null,
-  "warnings": [
-    "ODDS_API_KEY is not configured; leaving odds snapshot empty."
-  ],
+  "oddsSnapshot": {
+    "eventId": "ufc-329",
+    "fetchedAt": 1781018800453,
+    "bouts": {
+      "b1": {
+        "oddsA": 245,
+        "oddsB": -315,
+        "sourceTitle": "Conor McGregor vs Max Holloway"
+      },
+      "b2": {
+        "oddsA": 150,
+        "oddsB": -180,
+        "sourceTitle": "Paddy Pimblett vs Benoit Saint-Denis"
+      },
+      "b3": {
+        "oddsA": -150,
+        "oddsB": 128,
+        "sourceTitle": "Cory Sandhagen vs Mario Bautista"
+      }
+    },
+    "matchedBouts": 3,
+    "bookmakers": 3
+  },
+  "warnings": [],
   "sources": {
     "upcomingEvents": "https://en.wikipedia.org/wiki/List_of_UFC_events",
     "odds": "https://the-odds-api.com/"
