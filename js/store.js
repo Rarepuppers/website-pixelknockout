@@ -15,6 +15,7 @@
   const ODDS_CACHE_KEY = "pko_difficulty_cache_v1";
   const useSupabase = !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY);
   const today = () => new Date().toISOString().slice(0, 10);
+  const isPlayableBout = b => b && b.playable !== false && (b.cardSection || "main") === "main";
 
   function load() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } }
   function save(s) { localStorage.setItem(KEY, JSON.stringify(s)); }
@@ -154,7 +155,7 @@
         this.EVENT.oddsSource = "live";
         this.EVENT.oddsUpdatedAt = snapshot.fetchedAt;
         this.EVENT.oddsMatchedBouts = snapshot.matchedBouts;
-        this.EVENT.oddsStatus = `Matched ${snapshot.matchedBouts}/${this.EVENT.bouts.length} bouts from ${snapshot.bookmakers} bookmakers.`;
+          this.EVENT.oddsStatus = `Matched ${snapshot.matchedBouts}/${this.EVENT.bouts.filter(isPlayableBout).length} playable bouts from ${snapshot.bookmakers} bookmakers.`;
       } catch (e) {
         if (applyCached()) return;
         this.EVENT.oddsSource = "placeholder";
@@ -208,7 +209,7 @@
     _buildOddsSnapshot(games) {
       const snapshot = { eventId: this.EVENT.id, fetchedAt: Date.now(), bouts: {}, matchedBouts: 0, bookmakers: 0 };
       const books = new Set();
-      this.EVENT.bouts.forEach(bout => {
+      this.EVENT.bouts.filter(isPlayableBout).forEach(bout => {
         const match = this._findBoutGame(games, bout);
         if (!match) return;
         (match.game.bookmakers || []).forEach(b => books.add(b.key));
@@ -377,11 +378,21 @@
         })); return m; }
       const s = ensure(load()); return s.predictions[eventId] || {};
     },
-    // picks: [{boutId, pick, stake, multiplier}]
+    // picks: [{boutId, pick, stake, multiplier}] in local mode; Supabase ignores
+    // client multipliers and calculates them from event_bouts.
     async submitPicks(eventId, picks) {
+      const playableIds = new Set(this.EVENT.bouts.filter(isPlayableBout).map(b => b.id));
+      picks = picks.filter(p => playableIds.has(p.boutId));
+      if (!picks.length) throw new Error("Pick at least one playable main-card matchup.");
       const total = picks.reduce((n, p) => n + p.stake, 0);
       if (total > await this.getPoints()) throw new Error("Not enough Glory Points.");
-      if (useSupabase) { const c = await getSb(); await c.rpc("submit_predictions", { p_event: eventId, p_picks: picks }); return; }
+      if (useSupabase) {
+        const c = await getSb();
+        const serverPicks = picks.map(p => ({ boutId: p.boutId, pick: p.pick, stake: p.stake }));
+        const { error } = await c.rpc("submit_predictions", { p_event: eventId, p_picks: serverPicks });
+        if (error) throw new Error(error.message);
+        return;
+      }
       const s = ensure(load());
       s.predictions[eventId] = s.predictions[eventId] || {};
       picks.forEach(p => s.predictions[eventId][p.boutId] =
@@ -396,7 +407,7 @@
     async settleNextBout(eventId, opts = {}) {
       const s = ensure(load());
       const preds = s.predictions[eventId] || {};
-      const bout = this.EVENT.bouts.find(b => preds[b.id] && !preds[b.id].settled);
+      const bout = this.EVENT.bouts.find(b => isPlayableBout(b) && preds[b.id] && !preds[b.id].settled);
       if (!bout) return { done: true };
       const p = preds[bout.id];
       // A bout is voided if forced (demo), or flagged on the card (e.g. a real
@@ -427,7 +438,7 @@
         p.settled = true; p.result = winner; bout.result = winner;
       }
       save(s);
-      const remaining = this.EVENT.bouts.some(b => preds[b.id] && !preds[b.id].settled);
+      const remaining = this.EVENT.bouts.some(b => isPlayableBout(b) && preds[b.id] && !preds[b.id].settled);
       let awarded = null;
       if (!remaining) awarded = await this._awardTrophies(eventId);
       return { done: false, bout, voided, won: p.won, hit: !voided && p.pick === bout.demoWinner,
@@ -510,6 +521,180 @@
       };
       save(s);
       return { settled_count: settledCount, refunded_count: refundedCount, win_count: winCount, loss_count: lossCount };
+    },
+
+    async getAdminPlayers(query = "") {
+      if (!await this.isAdmin()) throw new Error("Admin access required.");
+      if (useSupabase) {
+        const c = await getSb();
+        const { data, error } = await c.rpc("admin_find_players", { p_query: query || "", p_limit: 25 });
+        if (error) throw new Error(error.message);
+        return (data || []).map(r => ({
+          id: r.user_id, email: r.email, name: r.name, nameChosen: !!r.name_chosen,
+          points: Number(r.points) || 0, showcaseItemId: r.showcase_item_id,
+          showcaseIcon: r.showcase_icon, showcaseTitle: r.showcase_title,
+          createdAt: r.created_at,
+        }));
+      }
+      const s = ensure(load()); seedBots(s); save(s);
+      const rows = [];
+      if (s.user) rows.push({ id: s.user.id, email: s.user.email, name: s.user.name,
+        nameChosen: !!s.user.nameChosen, points: s.points[SEASON] || 0,
+        showcaseItemId: s.user.showcaseItemId, showcaseIcon: s.user.showcaseIcon,
+        showcaseTitle: s.user.showcaseTitle, createdAt: s.user.createdAt, me: true });
+      s.bots.forEach(b => rows.push({ id: b.id, email: "", name: b.name, nameChosen: true,
+        points: b.points, showcaseIcon: b.showcaseIcon, showcaseTitle: b.showcaseTitle, bot: true }));
+      const q = String(query || "").toLowerCase().trim();
+      return q ? rows.filter(r => String(r.name || "").toLowerCase().includes(q) ||
+        String(r.email || "").toLowerCase().includes(q) || String(r.id || "").toLowerCase().includes(q)) : rows;
+    },
+
+    _localAdminLog(s, action, targetUserId, reason, beforeState, afterState) {
+      s.adminAudit = s.adminAudit || [];
+      s.adminAudit.unshift({
+        id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        adminEmail: this.user && this.user.email,
+        targetUserId, action, reason,
+        beforeState, afterState,
+        createdAt: new Date().toISOString(),
+      });
+      s.adminAudit = s.adminAudit.slice(0, 200);
+    },
+
+    async adminUpdatePlayerName(userId, name, nameChosen, reason) {
+      if (!await this.isAdmin()) throw new Error("Admin access required.");
+      const v = validateName(name);
+      if (!v.ok) throw new Error(v.reason);
+      if (!String(reason || "").trim()) throw new Error("Reason is required.");
+      if (useSupabase) {
+        const c = await getSb();
+        const { data, error } = await c.rpc("admin_update_player_name", {
+          p_user: userId, p_name: v.name, p_name_chosen: !!nameChosen, p_reason: reason,
+        });
+        if (error) throw new Error(error.message);
+        return Array.isArray(data) ? data[0] : data;
+      }
+      const s = ensure(load());
+      const before = JSON.parse(JSON.stringify(s.user || null));
+      if (!s.user || s.user.id !== userId) throw new Error("Local mode can only rename the signed-in player.");
+      s.user.name = v.name; s.user.nameChosen = !!nameChosen;
+      this._localAdminLog(s, "profile_name_update", userId, reason, before, s.user);
+      save(s); this.user = s.user; window.dispatchEvent(new Event("pko-auth"));
+      return { user_id: userId, name: v.name, name_chosen: !!nameChosen };
+    },
+
+    async adminAdjustPoints(userId, amount, label, reason) {
+      if (!await this.isAdmin()) throw new Error("Admin access required.");
+      const n = Number(amount);
+      if (!Number.isFinite(n) || n === 0) throw new Error("Point adjustment cannot be zero.");
+      if (!String(reason || "").trim()) throw new Error("Reason is required.");
+      if (useSupabase) {
+        const c = await getSb();
+        const { data, error } = await c.rpc("admin_adjust_points", {
+          p_user: userId, p_amount: Math.trunc(n), p_reason: reason,
+          p_label: label || "Admin point adjustment",
+        });
+        if (error) throw new Error(error.message);
+        return Array.isArray(data) ? data[0] : data;
+      }
+      const s = ensure(load()); seedBots(s);
+      const before = { points: s.points[SEASON] || 0 };
+      if (s.user && s.user.id === userId) {
+        const next = Math.max(0, before.points + Math.trunc(n));
+        const actual = next - before.points;
+        this._addPoints(s, actual, { type: "admin_adjustment", label: label || "Admin point adjustment" });
+        this._localAdminLog(s, "points_adjustment", userId, reason, before, { points: next });
+        save(s); return { user_id: userId, points: next };
+      }
+      const bot = s.bots.find(b => b.id === userId);
+      if (!bot) throw new Error("Player not found.");
+      const old = bot.points || 0;
+      bot.points = Math.max(0, old + Math.trunc(n));
+      this._localAdminLog(s, "points_adjustment", userId, reason, { points: old }, { points: bot.points });
+      save(s); return { user_id: userId, points: bot.points };
+    },
+
+    async adminGrantTrophy(userId, trophy, reason) {
+      if (!await this.isAdmin()) throw new Error("Admin access required.");
+      if (!String(reason || "").trim()) throw new Error("Reason is required.");
+      const clean = {
+        kind: trophy.kind || "award",
+        icon: trophy.icon || "PKO",
+        title: String(trophy.title || "").trim(),
+        sub: String(trophy.sub || "").trim(),
+        eventId: String(trophy.eventId || "").trim(),
+        eventTitle: String(trophy.eventTitle || "").trim(),
+      };
+      if (clean.title.length < 2) throw new Error("Reward title is required.");
+      if (useSupabase) {
+        const c = await getSb();
+        const { data, error } = await c.rpc("admin_grant_trophy", {
+          p_user: userId, p_kind: clean.kind, p_icon: clean.icon,
+          p_title: clean.title, p_sub: clean.sub, p_event_id: clean.eventId || null,
+          p_event_title: clean.eventTitle || null, p_reason: reason,
+        });
+        if (error) throw new Error(error.message);
+        return Array.isArray(data) ? data[0] : data;
+      }
+      const s = ensure(load());
+      if (!s.user || s.user.id !== userId) throw new Error("Local mode can only grant rewards to the signed-in player.");
+      const item = { id: `${userId}:admin:${Date.now()}`, userId, season: SEASON,
+        eventId: clean.eventId || null, eventTitle: clean.eventTitle || "",
+        kind: clean.kind, icon: clean.icon, title: clean.title, sub: clean.sub,
+        createdAt: new Date().toISOString() };
+      s.trophies.push(item);
+      this._localAdminLog(s, "trophy_grant", userId, reason, null, item);
+      save(s); return item;
+    },
+
+    async adminRevokeTrophy(trophyId, reason) {
+      if (!await this.isAdmin()) throw new Error("Admin access required.");
+      if (!String(reason || "").trim()) throw new Error("Reason is required.");
+      if (useSupabase) {
+        const c = await getSb();
+        const { error } = await c.rpc("admin_revoke_trophy", { p_trophy_id: trophyId, p_reason: reason });
+        if (error) throw new Error(error.message);
+        return;
+      }
+      const s = ensure(load());
+      const idx = s.trophies.findIndex(t => t.id === trophyId);
+      if (idx < 0) throw new Error("Reward not found.");
+      const item = s.trophies[idx];
+      s.trophies.splice(idx, 1);
+      if (s.user && s.user.showcaseItemId === trophyId) {
+        s.user.showcaseItemId = null; s.user.showcaseIcon = null; s.user.showcaseTitle = null;
+        this.user = s.user;
+      }
+      this._localAdminLog(s, "trophy_revoke", item.userId || (s.user && s.user.id), reason, item, null);
+      save(s); window.dispatchEvent(new Event("pko-auth"));
+    },
+
+    async adminGetPlayerTrophies(userId) {
+      if (!await this.isAdmin()) throw new Error("Admin access required.");
+      if (useSupabase) {
+        const c = await getSb();
+        const { data, error } = await c.rpc("admin_get_player_trophies", { p_user: userId });
+        if (error) throw new Error(error.message);
+        return data || [];
+      }
+      const s = ensure(load());
+      return (s.trophies || []).filter(t => !t.userId || t.userId === userId);
+    },
+
+    async adminGetAuditLog(limit = 50) {
+      if (!await this.isAdmin()) throw new Error("Admin access required.");
+      if (useSupabase) {
+        const c = await getSb();
+        const { data, error } = await c.rpc("admin_get_audit_log", { p_limit: limit });
+        if (error) throw new Error(error.message);
+        return (data || []).map(r => ({
+          id: r.id, adminEmail: r.admin_email, targetUserId: r.target_user_id,
+          action: r.action, reason: r.reason, beforeState: r.before_state,
+          afterState: r.after_state, createdAt: r.created_at,
+        }));
+      }
+      const s = ensure(load());
+      return (s.adminAudit || []).slice(0, limit);
     },
 
     // ---------- trophies / belts (virtual, zero value) ----------
@@ -646,8 +831,8 @@
 
       const s = ensure(load()); seedBots(s); save(s);
       const rows = s.bots.slice(0, 12).map((b, i) => {
-        const total = this.EVENT.bouts.length;
-        const settled = this.EVENT.bouts.filter(x => x.result).length;
+        const total = this.EVENT.bouts.filter(isPlayableBout).length;
+        const settled = this.EVENT.bouts.filter(x => isPlayableBout(x) && x.result).length;
         const hits = Math.max(0, Math.min(settled, Math.floor((settled + i) / 2)));
         const committed = Math.min(1000, 120 + ((i * 73) % 520));
         const returned = hits * (140 + ((i * 41) % 180));

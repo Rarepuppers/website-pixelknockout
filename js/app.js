@@ -40,6 +40,11 @@
   let draft = {}; // boutId -> {pick, stake}
   let currentPoints = 0;
   let leaderboardMode = "overall";
+  let adminQuery = "";
+  let adminSelectedUserId = null;
+  const isPlayableBout = b => b.playable !== false && (b.cardSection || "main") === "main";
+  const playableBouts = () => EVENT.bouts.filter(isPlayableBout);
+  const scheduleOnlyBouts = () => EVENT.bouts.filter(b => !isPlayableBout(b));
 
   // predictions lock at the card's start time
   const cardLocked = () => EVENT.lockTime && Date.now() >= new Date(EVENT.lockTime).getTime();
@@ -87,24 +92,30 @@
   window.PKO.openFighterProfile = openFighterProfile;
 
   // ---------- routing ----------
-  function route(name) {
+  function route(name, opts = {}) {
     $$(".view").forEach(v => v.classList.add("hidden"));
     const view = $("#view-" + name);
-    if (view) view.classList.remove("hidden");
-    $$(".nav-link[data-route]").forEach(l => l.classList.toggle("active", l.dataset.route === name));
-    if (name === "leaderboard") renderLeaderboard();
-    if (name === "events") renderEvents();
-    if (name === "play") renderPlay();
-    if (name === "profile") renderProfile();
-    if (name === "roster") renderRoster();
-    if (name === "legends") renderLegends();
-    if (name === "admin") renderAdminResults();
-    if (name === "season") {
+    const resolved = view ? name : "play";
+    const resolvedView = view || $("#view-play");
+    if (resolvedView) resolvedView.classList.remove("hidden");
+    if (!opts.skipHash && window.location.hash !== "#" + resolved) {
+      history.pushState(null, "", "#" + resolved);
+    }
+    $$(".nav-link[data-route]").forEach(l => l.classList.toggle("active", l.dataset.route === resolved));
+    if (resolved === "leaderboard") renderLeaderboard();
+    if (resolved === "events") renderEvents();
+    if (resolved === "play") renderPlay();
+    if (resolved === "profile") renderProfile();
+    if (resolved === "roster") renderRoster();
+    if (resolved === "legends") renderLegends();
+    if (resolved === "admin") renderAdminResults();
+    if (resolved === "season") {
       const el = $("#season-current");
       if (el) el.textContent = CFG.CURRENT_SEASON;
     }
   }
   $$("[data-route]").forEach(l => l.addEventListener("click", e => { e.preventDefault(); route(l.dataset.route); }));
+  window.addEventListener("hashchange", () => route((window.location.hash || "#play").slice(1), { skipHash: true }));
 
   // ---------- account box ----------
   function renderAccount() {
@@ -144,13 +155,20 @@
 
     const existing = signed ? await store.getPredictions(EVENT.id) : {};
     const timeLocked = cardLocked();
-    const hasPicks = Object.keys(existing).length > 0;
+    const hasPicks = playableBouts().some(b => existing[b.id]);
     const locked = hasPicks || timeLocked;
     renderHomeEventHub({ signed, pts, existing, timeLocked, hasPicks, locked });
     renderHomeQuickGuide();
 
     const wrap = $("#bouts"); wrap.innerHTML = "";
-    EVENT.bouts.forEach(b => wrap.appendChild(renderBout(b, existing[b.id], locked)));
+    if (playableBouts().length) {
+      wrap.insertAdjacentHTML("beforeend", `<div class="card-section-label"><p class="kicker">MAIN CARD PICKS</p><h2>Playable matchups</h2><p class="muted small">Only selected main-card bouts use Glory Points and count toward the event leaderboard.</p></div>`);
+      playableBouts().forEach(b => wrap.appendChild(renderBout(b, existing[b.id], locked)));
+    }
+    if (scheduleOnlyBouts().length) {
+      wrap.insertAdjacentHTML("beforeend", `<div class="card-section-label undercard"><p class="kicker">UNDERCARD</p><h2>Schedule only</h2><p class="muted small">These matchups are listed for card context. No PKO picks or prediction pricing are available for undercard bouts.</p></div>`);
+      scheduleOnlyBouts().forEach(b => wrap.appendChild(renderBout(b, existing[b.id], true)));
+    }
     updateStakeSummary(locked);
     renderNewsletterSignup($("#home-newsletter"), { compact: true });
     renderHomeFutureEvents();
@@ -167,7 +185,7 @@
     // dev: resolve fights one at a time so leaderboard moves after each fight.
     // The "void" button simulates a real fight being scratched (stake refunded).
     ["#dev-settle", "#dev-void"].forEach(id => { const e = $(id); if (e) e.remove(); });
-    const anyOpen = CFG.ENABLE_DEMO_SETTLEMENT && locked && Object.values(existing).some(p => !p.settled);
+    const anyOpen = CFG.ENABLE_DEMO_SETTLEMENT && locked && playableBouts().some(b => existing[b.id] && !existing[b.id].settled);
     if (anyOpen) {
       const resolve = async (opts) => {
         const r = await store.settleNextBout(EVENT.id, opts);
@@ -266,9 +284,10 @@
   function renderHomeEventHub(state) {
     const target = $("#home-event-hub");
     if (!target) return;
-    const settled = EVENT.bouts.filter(b => b.result).length;
-    const total = EVENT.bouts.length;
-    const nextOpen = EVENT.bouts.find(b => !b.result);
+    const playable = playableBouts();
+    const settled = playable.filter(b => b.result).length;
+    const total = playable.length;
+    const nextOpen = playable.find(b => !b.result);
     target.innerHTML = `<section class="home-panel event-hub">
       <div>
         <p class="kicker">${state.timeLocked ? "EVENT LIVE / LOCKED" : "NEXT EVENT"}</p>
@@ -293,7 +312,7 @@
       <div>
         <p class="kicker">HOW PKO WORKS</p>
         <h2>Pick fighters, track points, chase bragging rights</h2>
-        <p>Choose a pixel fighter for each matchup, commit only the free Glory Points you already have, then follow the event leaderboard as official results are settled.</p>
+        <p>Choose pixel fighters from selected main-card matchups, commit only the free Glory Points you already have, then follow the event leaderboard as official results are settled. Undercard bouts are listed for schedule context only.</p>
       </div>
       <div class="quick-steps">
         <span>1. Claim free points</span>
@@ -380,15 +399,21 @@
   }
 
   function renderBout(b, pred, locked) {
+    const playable = isPlayableBout(b);
     const el = document.createElement("div");
-    el.className = "bout";
-    el.innerHTML = `<div class="bout-weight">${b.weight}</div>
+    el.className = "bout" + (playable ? "" : " schedule-only");
+    el.innerHTML = `<div class="bout-weight">${playable ? "MAIN CARD" : "UNDERCARD"} | ${b.weight}</div>
       <div class="matchup">${fighterCard(b.a, "a", b.oddsA, pred, locked)}
         <div class="vs">VS</div>
         ${fighterCard(b.b, "b", b.oddsB, pred, locked)}</div>
       ${boutOutcomeHTML(b, locked, pred)}`;
 
-    if (!locked) {
+    if (!playable) {
+      const note = document.createElement("div");
+      note.className = "schedule-only-note";
+      note.innerHTML = `<strong>Undercard - schedule only</strong><span>No PKO picks or prediction pricing available for this bout.</span>`;
+      el.appendChild(note);
+    } else if (!locked) {
       const stake = Math.min((draft[b.id] && draft[b.id].stake) || Math.min(100, currentPoints), currentPoints);
       draft[b.id] = Object.assign({ pick: null }, draft[b.id], { stake });
       const row = document.createElement("div");
@@ -476,7 +501,7 @@
   }
 
   function committedPoints() {
-    return EVENT.bouts.reduce((sum, b) => {
+    return playableBouts().reduce((sum, b) => {
       const d = draft[b.id];
       return sum + (d && d.pick ? d.stake : 0);
     }, 0);
@@ -485,15 +510,16 @@
   function clampDraftStakes(activeBoutId) {
     const active = draft[activeBoutId];
     if (!active) return;
-    const otherCommitted = EVENT.bouts.reduce((sum, b) => {
+    const otherCommitted = playableBouts().reduce((sum, b) => {
       const d = draft[b.id];
       return sum + (b.id !== activeBoutId && d && d.pick ? d.stake : 0);
     }, 0);
     const maxForActive = Math.max(0, currentPoints - otherCommitted);
     active.stake = Math.min(active.stake || 0, maxForActive);
 
-    $$(".bout").forEach((el, i) => {
-      const bout = EVENT.bouts[i];
+    $$(".bout:not(.schedule-only)").forEach((el, i) => {
+      const bout = playableBouts()[i];
+      if (!bout) return;
       const d = draft[bout.id] || {};
       const other = committedPoints() - (d.pick ? (d.stake || 0) : 0);
       const max = Math.max(0, currentPoints - other);
@@ -538,7 +564,7 @@
   $("#submit-picks").onclick = async () => {
     if (!store.user || !store.user.nameChosen) { openAuth(); return; }
     const picks = [];
-    for (const b of EVENT.bouts) {
+    for (const b of playableBouts()) {
       const d = draft[b.id];
       if (d && d.pick && d.stake > 0) {
         const odds = d.pick === "a" ? b.oddsA : b.oddsB;
@@ -800,7 +826,7 @@
     `).join("");
   }
 
-  async function renderAdminResults() {
+  async function renderAdminResultsLegacy() {
     const body = $("#admin-results-body");
     if (!body) return;
     const allowed = await store.isAdmin();
@@ -830,6 +856,241 @@
     </div>
     <p id="admin-msg" class="auth-msg"></p>`;
 
+    $$(".admin-settle", body).forEach(btn => {
+      btn.onclick = async () => {
+        const row = btn.closest(".admin-bout");
+        const bout = EVENT.bouts.find(b => b.id === row.dataset.bout);
+        const result = $(".admin-result", row).value;
+        const winType = $(".admin-win-type", row).value.trim();
+        const detail = $(".admin-detail", row).value.trim();
+        if (!result) { $("#admin-msg").textContent = "Choose a result first."; return; }
+        if ((result === "a" || result === "b") && !winType) {
+          $("#admin-msg").textContent = "Choose a win type for completed fights.";
+          return;
+        }
+        btn.disabled = true;
+        $("#admin-msg").textContent = `Settling ${bout.weight}...`;
+        try {
+          const res = await store.adminSettleBout(EVENT.id, bout.id, result, winType, detail);
+          const count = res && (res.settled_count ?? res.settledCount ?? 0);
+          $("#admin-msg").textContent = `Settled ${bout.weight}. Updated ${count} player picks.`;
+          if (result === "a" || result === "b") {
+            bout.result = result;
+            bout.winType = winType || detail;
+          } else {
+            bout.result = result === "cancelled" ? "void" : result;
+            bout.winType = result;
+          }
+          await renderAdminResults();
+          renderPlay();
+          if (!$("#view-leaderboard").classList.contains("hidden")) renderLeaderboard();
+        } catch (e) {
+          btn.disabled = false;
+          $("#admin-msg").textContent = "Settlement failed: " + e.message;
+        }
+      };
+    });
+  }
+
+  async function renderAdminResults() {
+    const body = $("#admin-results-body");
+    if (!body) return;
+    const allowed = await store.isAdmin();
+    if (!allowed) {
+      body.innerHTML = `<div class="empty-state">Admin tools are locked. Sign in with an approved admin email to manage players, rewards, points, and official fight outcomes.</div>
+        <div class="source-panel">
+          <p><strong>How admin writes work:</strong> Supabase RPCs check the signed-in admin email before changing player state.</p>
+          <p class="small muted">Admin email allowlist is stored in Supabase. Do not rely on public config alone for write access.</p>
+        </div>`;
+      return;
+    }
+
+    let results = {}, players = [], trophies = [], audit = [];
+    try {
+      results = await store.getBoutResults(EVENT.id);
+      players = await store.getAdminPlayers(adminQuery);
+      if (!adminSelectedUserId && players.length) adminSelectedUserId = players[0].id;
+      if (adminSelectedUserId && !players.some(p => p.id === adminSelectedUserId)) {
+        const exact = await store.getAdminPlayers(adminSelectedUserId);
+        if (exact.length) players = [...exact, ...players.filter(p => p.id !== exact[0].id)];
+      }
+      if (adminSelectedUserId) trophies = await store.adminGetPlayerTrophies(adminSelectedUserId);
+      audit = await store.adminGetAuditLog(30);
+    } catch (e) {
+      body.innerHTML = `<div class="empty-state">Could not load admin tools: ${esc(e.message)}</div>`;
+      return;
+    }
+
+    const selected = players.find(p => p.id === adminSelectedUserId) || null;
+    const settled = Object.keys(results).length;
+    body.innerHTML = `<div class="source-panel">
+      <p><strong>${esc(EVENT.shortTitle || EVENT.title)}</strong></p>
+      <p class="small muted">${settled}/${EVENT.bouts.length} fights have official/manual outcomes. Last viewed ${esc(formatStatusTimestamp())}.</p>
+      <p class="small muted">Admin writes go through server RPCs and are recorded in the audit log. Use a clear reason for every moderation, point, and reward change.</p>
+    </div>
+    <section class="admin-section">
+      <div class="section-head"><div><p class="kicker">PLAYER ADMIN</p><h2>Profiles, points, rewards</h2></div></div>
+      <div class="admin-player-tools">
+        <div>
+          <div class="admin-search-row">
+            <input id="admin-player-query" class="input" value="${esc(adminQuery)}" placeholder="Search name, email, or user id" />
+            <button id="admin-player-search" class="btn btn-ghost">Search</button>
+          </div>
+          <div class="admin-player-list">
+            ${players.length ? players.map(p => adminPlayerRowHTML(p, p.id === adminSelectedUserId)).join("") : `<div class="empty-state">No matching players.</div>`}
+          </div>
+        </div>
+        <div id="admin-selected-player">
+          ${selected ? adminSelectedPlayerHTML(selected, trophies) : `<div class="empty-state">Select a player to manage.</div>`}
+        </div>
+      </div>
+      <p id="admin-player-msg" class="auth-msg"></p>
+    </section>
+    <section class="admin-section">
+      <div class="section-head"><div><p class="kicker">RESULT OPERATIONS</p><h2>Manual settlement</h2></div></div>
+      <p class="small muted">One-way settlement: after a bout is settled, correction requires a manual repair. Confirm the official result first.</p>
+      <p class="small muted">Result sources: <a href="https://www.ufc.com/results" target="_blank" rel="noopener">UFC results</a> | <a href="https://en.wikipedia.org/wiki/List_of_UFC_events" target="_blank" rel="noopener">Wikipedia UFC events</a> | <a href="https://www.ufcstats.com/statistics/events/completed" target="_blank" rel="noopener">UFCStats completed events</a></p>
+      <div class="admin-result-list">
+        ${EVENT.bouts.map(b => adminBoutHTML(b, results[b.id])).join("")}
+      </div>
+      <p id="admin-msg" class="auth-msg"></p>
+    </section>
+    <section class="admin-section">
+      <div class="section-head"><div><p class="kicker">AUDIT LOG</p><h2>Recent admin changes</h2></div></div>
+      <div class="admin-audit-list">${adminAuditHTML(audit)}</div>
+    </section>`;
+
+    bindAdminPlayerTools(body);
+    bindAdminSettlementTools(body);
+  }
+
+  function adminPlayerRowHTML(p, selected) {
+    return `<button class="admin-player-row ${selected ? "selected" : ""}" data-user="${esc(p.id)}">
+      <strong>${esc(p.name || "Fighter")}</strong>
+      <span>${esc(p.email || p.id)}</span>
+      <em>${Number(p.points || 0)} pts${p.nameChosen ? "" : " | name reset"}</em>
+    </button>`;
+  }
+
+  function adminSelectedPlayerHTML(p, trophies) {
+    return `<div class="admin-player-card">
+      <p class="kicker">SELECTED PLAYER</p>
+      <h2>${esc(p.name || "Fighter")}</h2>
+      <p class="muted small">${esc(p.email || p.id)}</p>
+      <p class="muted small">${Number(p.points || 0)} Glory Points</p>
+      <div class="admin-form-grid">
+        <label>Display name<input id="admin-name-input" class="input" value="${esc(p.name || "")}" maxlength="18" /></label>
+        <label class="admin-check"><input id="admin-name-chosen" type="checkbox" ${p.nameChosen ? "checked" : ""} /> Name is chosen</label>
+        <label class="wide">Reason<input id="admin-name-reason" class="input" placeholder="Why this name change is needed" /></label>
+        <button id="admin-save-name" class="btn btn-primary wide">Save name</button>
+      </div>
+      <div class="admin-form-grid">
+        <label>Point delta<input id="admin-point-amount" class="input" type="number" step="1" placeholder="e.g. 250 or -100" /></label>
+        <label>Ledger label<input id="admin-point-label" class="input" value="Admin point adjustment" /></label>
+        <label class="wide">Reason<input id="admin-point-reason" class="input" placeholder="Bug fix, correction, or moderation reason" /></label>
+        <button id="admin-adjust-points" class="btn btn-primary wide">Adjust points</button>
+      </div>
+      <div class="admin-form-grid">
+        <label>Kind<select id="admin-trophy-kind" class="input">
+          <option value="award">Award</option><option value="badge">Badge</option><option value="belt">Belt</option><option value="penalty">Penalty</option><option value="event">Event</option>
+        </select></label>
+        <label>Icon/text<input id="admin-trophy-icon" class="input" value="PKO" maxlength="16" /></label>
+        <label class="wide">Title<input id="admin-trophy-title" class="input" placeholder="Red Tomato Award" /></label>
+        <label class="wide">Subtitle<input id="admin-trophy-sub" class="input" placeholder="Cosmetic manual award" /></label>
+        <label>Event id<input id="admin-trophy-event" class="input" placeholder="${esc(EVENT.id)}" /></label>
+        <label>Event title<input id="admin-trophy-event-title" class="input" placeholder="${esc(EVENT.shortTitle)}" /></label>
+        <label class="wide">Reason<input id="admin-trophy-reason" class="input" placeholder="Why this reward is being granted" /></label>
+        <button id="admin-tomato-fill" class="btn btn-ghost">Fill Red Tomato</button>
+        <button id="admin-grant-trophy" class="btn btn-primary">Grant reward</button>
+      </div>
+      <h3>Rewards</h3>
+      <div class="admin-trophy-list">
+        ${trophies.length ? trophies.map(t => `<div class="admin-trophy-row">
+          <span>${esc(t.icon || "PKO")}</span><strong>${esc(t.title || "Reward")}</strong><em>${esc(t.kind || "award")}</em>
+          <button class="btn btn-ghost admin-revoke-trophy" data-trophy="${esc(t.id)}">Revoke</button>
+        </div>`).join("") : `<div class="empty-state">No manual rewards yet.</div>`}
+      </div>
+    </div>`;
+  }
+
+  function adminAuditHTML(rows) {
+    if (!rows.length) return `<div class="empty-state">No admin changes recorded yet.</div>`;
+    return rows.map(r => {
+      const when = r.createdAt ? new Date(r.createdAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "";
+      return `<article class="admin-audit-row">
+        <div><strong>${esc(r.action)}</strong><span>${esc(when)} | ${esc(r.adminEmail || "admin")}</span></div>
+        <p>${esc(r.reason || "")}</p>
+        <code>${esc(r.targetUserId || "no player target")}</code>
+      </article>`;
+    }).join("");
+  }
+
+  function bindAdminPlayerTools(root) {
+    const msg = $("#admin-player-msg");
+    const setMsg = text => { if (msg) msg.textContent = text; };
+    $("#admin-player-search").onclick = () => {
+      adminQuery = $("#admin-player-query").value.trim();
+      adminSelectedUserId = null;
+      renderAdminResults();
+    };
+    $("#admin-player-query").addEventListener("keydown", e => {
+      if (e.key === "Enter") $("#admin-player-search").click();
+    });
+    $$(".admin-player-row", root).forEach(btn => {
+      btn.onclick = () => { adminSelectedUserId = btn.dataset.user; renderAdminResults(); };
+    });
+    const selectedId = adminSelectedUserId;
+    if (!selectedId) return;
+
+    $("#admin-save-name").onclick = async () => {
+      try {
+        await store.adminUpdatePlayerName(selectedId, $("#admin-name-input").value,
+          $("#admin-name-chosen").checked, $("#admin-name-reason").value.trim());
+        await renderAdminResults();
+      } catch (e) { setMsg("Name update failed: " + e.message); }
+    };
+    $("#admin-adjust-points").onclick = async () => {
+      try {
+        await store.adminAdjustPoints(selectedId, $("#admin-point-amount").value,
+          $("#admin-point-label").value.trim(), $("#admin-point-reason").value.trim());
+        await renderAdminResults();
+      } catch (e) { setMsg("Point adjustment failed: " + e.message); }
+    };
+    $("#admin-tomato-fill").onclick = () => {
+      $("#admin-trophy-kind").value = "award";
+      $("#admin-trophy-icon").value = "TOM";
+      $("#admin-trophy-title").value = "Red Tomato Award";
+      $("#admin-trophy-sub").value = "Manual cosmetic award for peak tomato-energy takes.";
+      $("#admin-trophy-event").value = EVENT.id;
+      $("#admin-trophy-event-title").value = EVENT.shortTitle || EVENT.title;
+      if (!$("#admin-trophy-reason").value.trim()) $("#admin-trophy-reason").value = "Manual comedy award.";
+    };
+    $("#admin-grant-trophy").onclick = async () => {
+      try {
+        await store.adminGrantTrophy(selectedId, {
+          kind: $("#admin-trophy-kind").value,
+          icon: $("#admin-trophy-icon").value.trim(),
+          title: $("#admin-trophy-title").value.trim(),
+          sub: $("#admin-trophy-sub").value.trim(),
+          eventId: $("#admin-trophy-event").value.trim(),
+          eventTitle: $("#admin-trophy-event-title").value.trim(),
+        }, $("#admin-trophy-reason").value.trim());
+        await renderAdminResults();
+      } catch (e) { setMsg("Reward grant failed: " + e.message); }
+    };
+    $$(".admin-revoke-trophy", root).forEach(btn => {
+      btn.onclick = async () => {
+        const reason = window.prompt("Reason for revoking this reward?");
+        if (!reason) return;
+        try {
+          await store.adminRevokeTrophy(btn.dataset.trophy, reason);
+          await renderAdminResults();
+        } catch (e) { setMsg("Reward revoke failed: " + e.message); }
+      };
+    });
+  }
+
+  function bindAdminSettlementTools(body) {
     $$(".admin-settle", body).forEach(btn => {
       btn.onclick = async () => {
         const row = btn.closest(".admin-bout");
@@ -1197,7 +1458,7 @@
   window.addEventListener("pko-auth", async () => {
     renderAccount();
     if (store.needsUsername()) { openNameModal(); return; }
-    renderPlay();
+    route((window.location.hash || "#play").slice(1), { skipHash: true });
   });
 
   // ---------- boot ----------
@@ -1205,7 +1466,7 @@
     await store.init();
     renderAccount();
     if (store.needsUsername()) openNameModal();
-    route("play");
+    route((window.location.hash || "#play").slice(1), { skipHash: true });
     renderCountdown();
     setInterval(renderCountdown, 30000);
     setInterval(() => { if (!$("#view-play").classList.contains("hidden")) renderPlay(); }, 60000);

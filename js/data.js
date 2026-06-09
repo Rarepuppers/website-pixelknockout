@@ -711,12 +711,12 @@ const _CARD = {
   season: (window.PKO_CONFIG && window.PKO_CONFIG.CURRENT_SEASON) || new Date().getFullYear(),
   oddsSource: "placeholder",
   bouts: [
-    { id: "b1", weight: "WELTERWEIGHT", aReal: "Conor McGregor",     bReal: "Max Holloway",       oddsA: +150, oddsB: -180, demoWinner: "b", winType: "unanimous decision", result: null },
-    { id: "b2", weight: "LIGHTWEIGHT",  aReal: "Paddy Pimblett",     bReal: "Benoît Saint Denis", oddsA: -145, oddsB: +125, demoWinner: "a", winType: "submission", result: null },
-    { id: "b3", weight: "BANTAMWEIGHT", aReal: "Cory Sandhagen",     bReal: "Mario Bautista",     oddsA: -200, oddsB: +170, demoWinner: "a", winType: "split decision", result: null },
-    { id: "b4", weight: "FLYWEIGHT",    aReal: "Brandon Royval",     bReal: "Lone'er Kavanagh",   oddsA: -130, oddsB: +110, demoWinner: "a", winType: "submission", result: null },
-    { id: "b5", weight: "HEAVYWEIGHT",  aReal: "Gable Steveson",     bReal: "Elisha Ellison",     oddsA: -300, oddsB: +240, demoWinner: "a", winType: "TKO", result: null },
-    { id: "b6", weight: "LIGHT HEAVY",  aReal: "Robert Whittaker",   bReal: "Nikita Krylov",      oddsA: -160, oddsB: +140, demoWinner: "a", winType: "decision", result: null },
+    { id: "b1", cardSection: "main", playable: true, weight: "WELTERWEIGHT", aReal: "Conor McGregor",     bReal: "Max Holloway",       oddsA: +150, oddsB: -180, demoWinner: "b", winType: "unanimous decision", result: null },
+    { id: "b2", cardSection: "main", playable: true, weight: "LIGHTWEIGHT",  aReal: "Paddy Pimblett",     bReal: "Benoît Saint Denis", oddsA: -145, oddsB: +125, demoWinner: "a", winType: "submission", result: null },
+    { id: "b3", cardSection: "main", playable: true, weight: "BANTAMWEIGHT", aReal: "Cory Sandhagen",     bReal: "Mario Bautista",     oddsA: -200, oddsB: +170, demoWinner: "a", winType: "split decision", result: null },
+    { id: "b4", cardSection: "undercard", playable: false, weight: "FLYWEIGHT",    aReal: "Brandon Royval",     bReal: "Lone'er Kavanagh",   oddsA: -130, oddsB: +110, demoWinner: "a", winType: "submission", result: null },
+    { id: "b5", cardSection: "undercard", playable: false, weight: "HEAVYWEIGHT",  aReal: "Gable Steveson",     bReal: "Elisha Ellison",     oddsA: -300, oddsB: +240, demoWinner: "a", winType: "TKO", result: null },
+    { id: "b6", cardSection: "undercard", playable: false, weight: "LIGHT HEAVY",  aReal: "Robert Whittaker",   bReal: "Nikita Krylov",      oddsA: -160, oddsB: +140, demoWinner: "a", winType: "decision", result: null },
   ],
 };
 // resolve each fighter to a persona (authored or generated)
