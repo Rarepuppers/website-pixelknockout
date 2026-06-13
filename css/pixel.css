@@ -546,6 +546,28 @@ a { color: var(--blue); text-decoration: none; }
 .showcase-art.text { display: inline-flex; align-items: center; justify-content: center; }
 .profile-head { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
 .profile-head h1 { margin: 0; }
+.profile-art-stack { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 220px; }
+.meme-line {
+  border: 2px solid var(--gold); background: var(--bg2); color: var(--ink);
+  border-radius: 8px; padding: 8px 10px; cursor: pointer; box-shadow: 0 3px 0 var(--shadow);
+  font-family: 'VT323'; font-size: 17px; line-height: 1.05; text-align: center;
+}
+.meme-line:hover { transform: translateY(1px); box-shadow: 0 2px 0 var(--shadow); color: var(--gold); }
+.profile-meme { width: 100%; }
+.legend-meme { width: 100%; margin: 8px 0 10px; }
+.crew-sprite-stack { height: auto; min-height: 96px; gap: 6px; padding: 4px 0; }
+.crew-meme {
+  width: min(168px, 24vw); font-size: 13px; padding: 5px 6px; border-color: var(--blue);
+  position: relative; left: 56px; top: -58px; margin-bottom: -54px;
+}
+.rename-chip-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.rename-chip {
+  display: inline-flex; flex-direction: column; gap: 2px; background: var(--panel);
+  border: 2px solid var(--border); border-radius: 8px; padding: 8px 10px;
+}
+.rename-chip strong { color: var(--ink); }
+.rename-chip em { color: var(--gold); font-style: normal; }
+.rename-chip small { color: var(--muted); }
 .shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; margin-top: 14px; }
 .trophy {
   background: var(--panel); border: 3px solid var(--border); border-radius: 10px;
@@ -686,6 +708,8 @@ textarea.input { resize: vertical; font-family: 'VT323'; }
   .roster-head { display: none; }
   .roster-sprite { width: 64px; height: 64px; }
   .roster-sprite img { width: 60px; height: 60px; }
+  .crew-sprite-stack { width: 100%; align-items: flex-start; }
+  .crew-meme { position: static; width: 100%; margin: 8px 0 0; }
   .history-row { grid-template-columns: 1fr auto; }
   .history-balance { grid-column: 1 / -1; text-align: left; }
   .error-arena { grid-template-columns: 1fr; }

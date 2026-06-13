@@ -103,6 +103,29 @@ _setPersonaImage("Bo Nickal", "assets/fighters/generated/nickal.png");
 _setPersonaImage("Diego Lopes", "assets/fighters/generated/lopes.png");
 _setPersonaImage("Derrick Lewis", "assets/fighters/generated/derrick-lewis.png");
 _setPersonaImage("Arman Tsarukyan", "assets/fighters/generated/arman.png");
+_setPersonaImage("Maurício Ruffy", "assets/fighters/generated/ruffy.png");
+_setPersonaImage("Aiemann Zahabi", "assets/fighters/generated/zahabi.png");
+_setPersonaImage("Dricus du Plessis", "assets/fighters/generated/du-plessis.png");
+_setPersonaImage("Nassourdine Imavov", "assets/fighters/generated/imavov.png");
+_setPersonaImage("Leon Edwards", "assets/fighters/generated/leon-edwards.png");
+_setPersonaImage("Yair Rodriguez", "assets/fighters/generated/yair-rodriguez.png");
+_setPersonaImage("Yair Rodríguez", "assets/fighters/generated/yair-rodriguez.png");
+_setPersonaImage("Cody Garbrandt", "assets/fighters/generated/cody-garbrandt.png");
+_setPersonaImage("Jean Silva", "assets/fighters/generated/jean-silva.png");
+_setPersonaImage("Michael Morales", "assets/fighters/generated/michael-morales.png");
+_setPersonaImage("Islam Makhachev", "assets/fighters/generated/makhachev.png");
+_setPersonaImage("Jon Jones", "assets/fighters/generated/jon-jones.png");
+_setPersonaImage("Tom Aspinall", "assets/fighters/generated/aspinall.png");
+_setPersonaImage("Magomed Ankalaev", "assets/fighters/generated/ankalaev.png");
+_setPersonaImage("Alexander Volkanovski", "assets/fighters/generated/volkanovski.png");
+_setPersonaImage("Merab Dvalishvili", "assets/fighters/generated/dvalishvili.png");
+_setPersonaImage("Charles Oliveira", "assets/fighters/generated/oliveira.png");
+_setPersonaImage("Dustin Poirier", "assets/fighters/generated/poirier.png");
+_setPersonaImage("Khamzat Chimaev", "assets/fighters/generated/chimaev.png");
+_setPersonaImage("Israel Adesanya", "assets/fighters/generated/adesanya.png");
+_setPersonaImage("Sean Strickland", "assets/fighters/generated/strickland.png");
+_setPersonaImage("Alexandre Pantoja", "assets/fighters/generated/pantoja.png");
+_setPersonaImage("Beneil Dariush", "assets/fighters/generated/dariush.png");
 
 window.PKO_RING_CREW = [
   {
@@ -141,6 +164,41 @@ window.PKO_RING_CREW = [
     img: "assets/characters/generic-ring-card-host.png",
   },
   {
+    realName: "Herb Dean",
+    pixelName: "Herb Debug",
+    role: "Referee",
+    note: "Original PKO pixel referee art; public-name reference only, not a likeness.",
+    img: "assets/characters/herb-dean.png",
+  },
+  {
+    realName: "Marc Goddard",
+    pixelName: "Marc Guardhard",
+    role: "Referee",
+    note: "Original PKO pixel referee art; public-name reference only, not a likeness.",
+    img: "assets/characters/marc-goddard.png",
+  },
+  {
+    realName: "Jason Herzog",
+    pixelName: "Jason Hurtzog",
+    role: "Referee",
+    note: "Original PKO pixel referee art; public-name reference only, not a likeness.",
+    img: "assets/characters/jason-herzog.png",
+  },
+  {
+    realName: "Dan Miragliotta",
+    pixelName: "Dan Mega-lotta",
+    role: "Referee",
+    note: "Original PKO pixel referee art; public-name reference only, not a likeness.",
+    img: "assets/characters/dan-miragliotta.png",
+  },
+  {
+    realName: "John McCarthy",
+    pixelName: "Big John Mainframe",
+    role: "Legacy referee / analyst",
+    note: "Original PKO pixel referee art; public-name reference only, not a likeness.",
+    img: "assets/characters/john-mccarthy.png",
+  },
+  {
     realName: "Bruce Buffer",
     pixelName: "Bruce Bitbuffer",
     role: "Arena announcer",
@@ -149,7 +207,7 @@ window.PKO_RING_CREW = [
   },
   {
     realName: "Joe Rogan",
-    pixelName: "Joe Roguelike",
+    pixelName: "Joe Bogan",
     role: "Commentator",
     note: "Original PKO pixel broadcast art; public-name reference only, not a likeness.",
     img: "assets/characters/joe-rogan.png",
@@ -198,6 +256,90 @@ window.PKO_RING_CREW = [
   },
 ];
 
+window.PKO_MEME_LINES = {
+  "Conor McGregor": [
+    "Who the fook is that pixel?",
+    "Mystic Mac predicts a lag spike in round two.",
+    "Thanks for the cheese, now load the next matchup.",
+    "Precision beats power; timing beats bad Wi-Fi.",
+    "The red-panty night became a red-pixel night.",
+  ],
+  "Khabib Nurmagomedov": [
+    "Send location.",
+    "Black belt? Who give him? We have to check this.",
+    "Send him 2-3 years Dagestan and forget.",
+    "The cage is just another grappling partner.",
+    "He smeshes the X button and the opponent.",
+  ],
+  "Mark Hunt": [
+    "Walk-off KO. No follow-up button required.",
+    "Super Samoan mode: one swing, loading screen.",
+    "The chin stat broke the spreadsheet.",
+    "If the pixel lands clean, the camera stops tracking.",
+    "Post-fight interview: short, sharp, and somehow legendary.",
+  ],
+  "Joe Rogan": [
+    "Joe Bogan has entered Aussie podcast mode.",
+    "Have you ever tried elk after five rounds?",
+    "That leg kick sounded like a didgeridoo in a sauna.",
+    "Pull that up, Jamie, but make it 16-bit.",
+    "Imagine a gorilla with underhooks and a podcast deal.",
+  ],
+  "Dana White": [
+    "That is not a real matchup until the tomato approves.",
+    "Listen, the pixels wanted this fight.",
+    "Performance bonus: one golden cartridge.",
+    "We are not doing that rematch unless the sprites show up.",
+    "Dana Byte just booked a main event in the loading screen.",
+  ],
+  "Chael Sonnen": [
+    "Undefeated on the microphone, never lost a text box.",
+    "I cannot let you get close to the controller.",
+    "Bad Guy mode unlocked.",
+    "The only tap was on the touchscreen.",
+    "Lineal champion of every loading screen.",
+  ],
+  "Ariel Helwani": [
+    "Sources say the pixels are close.",
+    "Ariel Headline just broke the patch notes.",
+    "The nose awards are now a seasonal shrine item.",
+    "He asked one follow-up and the boss music started.",
+  ],
+  "Bruce Buffer": [
+    "It is time... to press Start.",
+    "Bruce Bitbuffer announces every loading screen like a title fight.",
+    "Voice meter: maxed. Arena speakers: worried.",
+  ],
+  "Mike Goldberg": [
+    "Here we go!",
+    "Mike Goldbar calls the combo before the sprite knows it landed.",
+    "Everything is virtually identical, except the pixels.",
+  ],
+  "Jon Anik": [
+    "Jon Arcade has the read, the stat, and the sponsor-free recap.",
+    "Broadcast accuracy buff applied.",
+    "Anik mode: names pronounced before the round timer blinks.",
+  ],
+  "Nina Drama": [
+    "Nina Datastream found the funniest angle before weigh-ins.",
+    "Interview combo: charm, chaos, clean audio.",
+    "The reel got more reach than the jab.",
+  ],
+};
+
+window.PKO_RENAME_IDEAS = [
+  { realName: "Joe Rogan", pixelName: "Joe Bogan", note: "Aussie-mode commentator joke." },
+  { realName: "Dana White", pixelName: "Dana Byte", note: "Executive boss screen energy." },
+  { realName: "Ariel Helwani", pixelName: "Ariel Headline", note: "Reporter/news-breaker pun." },
+  { realName: "Chael Sonnen", pixelName: "Chael Console", note: "Talk-heavy retro-game pun." },
+  { realName: "Mark Hunt", pixelName: "Mark Hunted", note: "Walk-off heavyweight meme energy." },
+  { realName: "Khabib Nurmagomedov", pixelName: "Kabob Nurmagamedodge", note: "Existing PKO grappler pun." },
+];
+
+window.PKO_getMemeLines = function (realName, pixelName) {
+  return window.PKO_MEME_LINES[realName] || window.PKO_MEME_LINES[pixelName] || [];
+};
+
 // ---------- country lookup (real name -> country + flag) ----------
 // Used by the generator so auto-made personas still get a REAL flag. In
 // production the country comes from the fighter feed; this map is the stopgap.
@@ -214,6 +356,7 @@ window.PKO_COUNTRIES = {
   "Magomed Ankalaev":  { country: "Russia", flag: "🇷🇺" },
   "Dricus du Plessis": { country: "South Africa", flag: "🇿🇦" },
   "Israel Adesanya":   { country: "Nigeria", flag: "🇳🇬" },
+  "Nassourdine Imavov": { country: "France", flag: "🇫🇷" },
   "Sean Strickland":   { country: "United States", flag: "🇺🇸" },
   "Ilia Topuria":      { country: "Spain", flag: "🇪🇸" },
   "Alexander Volkanovski": { country: "Australia", flag: "🇦🇺" },
@@ -226,6 +369,7 @@ window.PKO_COUNTRIES = {
   "Kamaru Usman":      { country: "Nigeria", flag: "🇳🇬" },
   "Belal Muhammad":    { country: "United States", flag: "🇺🇸" },
   "Khamzat Chimaev":   { country: "United Arab Emirates", flag: "🇦🇪" },
+  "Michael Morales":   { country: "Ecuador", flag: "🇪🇨" },
   "Charles Oliveira":  { country: "Brazil", flag: "🇧🇷" },
   "Dustin Poirier":    { country: "United States", flag: "🇺🇸" },
   "Justin Gaethje":    { country: "United States", flag: "🇺🇸" },
@@ -416,7 +560,14 @@ window.PKO_POPULAR_ROSTER_SEEDS = {
       { name: "Jack Della Maddalena", weight: "Welterweight", country: "Australia", flag: "🇦🇺" },
       { name: "Shavkat Rakhmonov", weight: "Welterweight", country: "Kazakhstan", flag: "🇰🇿" },
       { name: "Ian Machado Garry", weight: "Welterweight", country: "Ireland", flag: "🇮🇪" },
+      { name: "Dricus du Plessis", weight: "Middleweight", country: "South Africa", flag: "🇿🇦" },
+      { name: "Nassourdine Imavov", weight: "Middleweight", country: "France", flag: "🇫🇷" },
+      { name: "Leon Edwards", weight: "Welterweight", country: "England", flag: "🏴" },
+      { name: "Yair Rodriguez", weight: "Featherweight", country: "Mexico", flag: "🇲🇽" },
+      { name: "Cody Garbrandt", weight: "Bantamweight", country: "United States", flag: "🇺🇸" },
+      { name: "Michael Morales", weight: "Welterweight", country: "Ecuador", flag: "🇪🇨" },
       { name: "Umar Nurmagomedov", weight: "Bantamweight", country: "Russia", flag: "🇷🇺" },
+      { name: "Beneil Dariush", weight: "Lightweight", country: "United States", flag: "🇺🇸" },
       { name: "Aljamain Sterling", weight: "Featherweight", country: "United States", flag: "🇺🇸" },
       { name: "Deiveson Figueiredo", weight: "Bantamweight", country: "Brazil", flag: "🇧🇷" },
       { name: "Jean Silva", weight: "Featherweight", country: "Brazil", flag: "🇧🇷" },
@@ -700,6 +851,30 @@ window.PKO_LEGENDS = [
     fun: "The cage is just another grappling partner.",
   },
   {
+    name: "Mark Hunt",
+    pixelName: "Mark Hunted",
+    country: "New Zealand / Samoa",
+    divisions: "Heavyweight",
+    record: "13-14-1, 1 NC",
+    status: "Inactive",
+    badges: ["K-1 World Grand Prix champion", "Walk-off KO icon"],
+    quote: "Walk-off KO.",
+    facts: ["Kickboxing great who became a cult MMA heavyweight.", "Known for massive punching power and famous walk-off knockouts.", "Built a huge online following through blunt, memorable posts."],
+    fun: "One clean pixel punch skips the replay and rolls credits.",
+  },
+  {
+    name: "Chael Sonnen",
+    pixelName: "Chael Console",
+    country: "United States",
+    divisions: "Middleweight / Light Heavyweight",
+    record: "31-17-1",
+    status: "Retired / analyst",
+    badges: ["Title challenger", "Trash-talk legend"],
+    quote: "I can't let you get close.",
+    facts: ["Elite wrestler and major UFC title challenger.", "Became one of MMA's most famous talkers and analysts.", "Known for promotional one-liners and deadpan confidence."],
+    fun: "Speech stat maxed before the fight contract loads.",
+  },
+  {
     name: "Demetrious Johnson",
     pixelName: "Demetrius Joystick",
     country: "United States",
@@ -846,26 +1021,14 @@ const _CARD = {
 _CARD.bouts.forEach(b => { b.a = window.PKO_getPersona(b.aReal); b.b = window.PKO_getPersona(b.bReal); });
 window.PKO_EVENT = _CARD;
 
-window.PKO_EVENTS_FALLBACK = [
-  {
-    event: "UFC Freedom 250",
-    date: "Jun 14, 2026",
-    venue: "White House",
-    location: "Washington, D.C., U.S.",
-  },
-  {
-    event: "UFC Fight Night: Kape vs. Horiguchi",
-    date: "Jun 20, 2026",
-    venue: "Meta Apex",
-    location: "Las Vegas, Nevada, U.S.",
-  },
-  {
-    event: "UFC Fight Night: Fiziev vs. Torres",
-    date: "Jun 27, 2026",
-    venue: "National Gymnastics Arena",
-    location: "Baku, Azerbaijan",
-  },
-];
+// No hard-coded "upcoming events" — inventing fake cards here is misleading.
+// The schedule is sourced live, in priority order, by the app:
+//   1) admin-curated events in Supabase (store.getUpcomingEvents)
+//   2) the cron-refreshed cache (js/generated-content.js, real Wikipedia data)
+//   3) a live Wikipedia pull
+// If all of those are unavailable, the UI shows an honest "check UFC.com" state
+// instead of fabricated rows.
+window.PKO_EVENTS_FALLBACK = [];
 
 // American odds -> decimal payout multiplier (what 1 staked point returns).
 window.PKO_oddsToMultiplier = function (american) {

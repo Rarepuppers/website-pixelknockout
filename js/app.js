@@ -43,6 +43,15 @@
       : `<span class="${cls} text">${esc(item?.icon || "PKO")}</span>`;
   };
   const emptyArtHTML = text => `<div class="empty-state with-art"><img src="${esc(UI_ART.empty)}" alt="" loading="lazy" /><span>${esc(text)}</span></div>`;
+  let memeId = 0;
+  const memeSets = {};
+  const memeLines = (realName, pixelName) => window.PKO_getMemeLines ? window.PKO_getMemeLines(realName, pixelName) : [];
+  const memeButtonHTML = (lines, cls = "") => {
+    if (!lines || !lines.length) return "";
+    const id = `meme-${++memeId}`;
+    memeSets[id] = lines;
+    return `<button class="meme-line ${cls}" type="button" data-meme="${id}" data-idx="0" title="Click for another line">${esc(lines[0])}</button>`;
+  };
   const flagSlug = country => {
     const key = String(country || "Parts Unknown").toLowerCase();
     const map = {
@@ -102,12 +111,13 @@
 
   // ---------- fighter profile ----------
   function openFighterProfile(f) {
+    const lines = memeLines(f.real, f.name);
     const facts = (f.facts || []).map(x => `<li>${esc(x)}</li>`).join("");
     const quotes = (f.quotes || []).map(x => `<li>“${esc(x)}”</li>`).join("");
     const jokes = (f.jokes || []).map(x => `<li>${esc(x)}</li>`).join("");
     $("#fighter-body").innerHTML = `
       <div class="profile-head">
-        ${avatarHTML(f, "big")}
+        <div class="profile-art-stack">${avatarHTML(f, "big")}${memeButtonHTML(lines, "profile-meme")}</div>
         <div><h1>${esc(f.name)}</h1>
           <p class="rank-line">${rankChip(f.ranking)} ${f.ranking ? esc(rankTitle(f.ranking)) : "Unranked"}</p>
           <p class="muted">as ${esc(f.real)} · <span class="flag" title="${esc(f.country || "Parts Unknown")}">${flagHTML(f.country || "Parts Unknown")}</span> ${esc(f.country || "Parts Unknown")}</p>
@@ -149,6 +159,15 @@
   }
   $$("[data-route]").forEach(l => l.addEventListener("click", e => { e.preventDefault(); route(l.dataset.route); }));
   window.addEventListener("hashchange", () => route((window.location.hash || "#play").slice(1), { skipHash: true }));
+  document.addEventListener("click", e => {
+    const btn = e.target.closest(".meme-line");
+    if (!btn) return;
+    const lines = memeSets[btn.dataset.meme] || [];
+    if (!lines.length) return;
+    const next = (Number(btn.dataset.idx || 0) + 1) % lines.length;
+    btn.dataset.idx = String(next);
+    btn.textContent = lines[next];
+  });
 
   async function renderPriorities() {
     const view = $("#view-priorities");
@@ -369,11 +388,12 @@
         <p class="kicker">HOW PKO WORKS</p>
         <h2>Pick fighters, track points, chase bragging rights</h2>
         <p>Choose pixel fighters from selected main-card matchups, commit only the free Glory Points you already have, then follow the event leaderboard as official results are settled. Undercard bouts are listed for schedule context only.</p>
+        <p class="small muted">PKO is unofficial and free to play. Glory Points have zero cash value, cannot be purchased, and cannot be cashed out. Fight cards and start times may change.</p>
       </div>
       <div class="quick-steps">
         <span>1. Claim free points</span>
-        <span>2. Lock picks</span>
-        <span>3. Follow results</span>
+        <span>2. Pick main card</span>
+        <span>3. Track results</span>
       </div>
       <div class="event-hub-actions">
         <button class="btn btn-ghost" data-route="rules">Rules</button>
@@ -387,6 +407,7 @@
     const target = $("#home-future-events");
     if (!target) return;
     const render = (events, source, pulledAt) => {
+      if (!events || !events.length) { target.innerHTML = ""; return; } // no fabricated rows
       target.innerHTML = `<section class="home-panel">
         <div class="section-head">
           <div><p class="kicker">FUTURE EVENTS</p><h2>Next cards</h2></div>
@@ -403,12 +424,14 @@
       </section>`;
       $$("[data-route]", target).forEach(btn => btn.onclick = e => { e.preventDefault(); route(btn.dataset.route); });
     };
+    const sourceLabel = events => events.source === "db" ? "PKO schedule"
+      : events.generated ? "Automated schedule cache" : events.stale ? "Cached schedule" : "Live schedule";
     try {
       const events = await fetchUpcomingEvents();
-      render(events.length ? events : EVENT_FALLBACK, events.length ? "Live schedule" : "Fallback schedule", events.pulledAt);
+      render(events, sourceLabel(events), events.pulledAt);
     } catch {
       const cached = getCachedUpcomingEvents(CFG.EVENTS_CACHE_MINUTES || 30, true);
-      render(cached || EVENT_FALLBACK, cached ? "Cached schedule" : "Fallback schedule", cached?.pulledAt || new Date());
+      render(cached || [], cached ? "Cached schedule" : "", cached?.pulledAt || new Date());
     }
   }
 
@@ -710,7 +733,7 @@
 
   // ---------- future events ----------
   const UPCOMING_EVENT_LIMIT = 2;
-  const EVENTS_CACHE_KEY = "pko_upcoming_events_cache_v1";
+  const EVENTS_CACHE_KEY = "pko_upcoming_events_cache_v2"; // v2: drop any cache that held the old hard-coded sample events
 
   function parseEventDate(dateText) {
     const t = Date.parse(dateText);
@@ -796,6 +819,15 @@
   }
 
   async function fetchUpcomingEvents() {
+    // 1) admin-curated events from Supabase — authoritative, never fabricated.
+    try {
+      const dbEvents = await store.getUpcomingEvents(UPCOMING_EVENT_LIMIT);
+      if (dbEvents && dbEvents.length) {
+        dbEvents.pulledAt = new Date();
+        dbEvents.source = "db";
+        return dbEvents;
+      }
+    } catch {}
     const cached = getCachedUpcomingEvents();
     if (cached) return cached;
     const generated = getGeneratedUpcomingEvents();
@@ -848,21 +880,26 @@
   }
 
   async function renderEvents() {
-    renderEventCards(EVENT_FALLBACK.slice(0, UPCOMING_EVENT_LIMIT), `Loading live schedule | Event details last pulled ${formatPulledAt()}`);
+    const list = $("#events-list");
+    if (list) list.innerHTML = `<div class="empty-state">Loading the upcoming schedule…</div>`;
+    $("#events-source").textContent = "Checking PKO schedule, cache, and Wikipedia…";
     try {
       const events = await fetchUpcomingEvents();
       const source = events.length
-        ? (events.generated ? "Automated schedule cache; verify against UFC.com" : events.stale ? "Cached schedule; verify against UFC.com" : "Live schedule")
-        : "Fallback schedule; verify against UFC.com";
+        ? (events.source === "db" ? "PKO schedule; verify against UFC.com"
+           : events.generated ? "Automated schedule cache; verify against UFC.com"
+           : events.stale ? "Cached schedule; verify against UFC.com"
+           : "Live schedule")
+        : "No schedule loaded; check UFC.com";
       renderEventCards(
-        events.length ? events : EVENT_FALLBACK.slice(0, UPCOMING_EVENT_LIMIT),
+        events,
         `${source} | Event details last pulled ${formatPulledAt(events.pulledAt || new Date())}`
       );
     } catch {
       const stale = getCachedUpcomingEvents(CFG.EVENTS_CACHE_MINUTES || 30, true);
       renderEventCards(
-        stale || EVENT_FALLBACK.slice(0, UPCOMING_EVENT_LIMIT),
-        `${stale ? "Cached schedule; verify against UFC.com" : "Fallback schedule; verify against UFC.com"} | Event details last pulled ${formatPulledAt(stale?.pulledAt || new Date())}`
+        stale || [],
+        `${stale ? "Cached schedule; verify against UFC.com" : "No schedule loaded; check UFC.com"} | Event details last pulled ${formatPulledAt(stale?.pulledAt || new Date())}`
       );
     }
   }
@@ -922,14 +959,26 @@
           <span>Sprite</span><span>Real / reference name</span><span>PKO alternate name</span><span>Role</span><span>Use note</span>
         </div>
         ${crew.map(c => `<div class="roster-row">
-          <span class="roster-sprite"><img src="${esc(c.img)}" alt="${esc(c.pixelName)} pixel presenter" loading="lazy" /></span>
+          <span class="roster-sprite crew-sprite-stack"><img src="${esc(c.img)}" alt="${esc(c.pixelName)} pixel presenter" loading="lazy" />${memeButtonHTML(memeLines(c.realName, c.pixelName), "crew-meme")}</span>
           <span>${esc(c.realName)}</span>
           <span class="pixel-name">${esc(c.pixelName)}</span>
           <span>${esc(c.role)}</span>
           <span>${esc(c.note)}</span>
         </div>`).join("")}
       </div>
+      ${renderRenameIdeas()}
     </section>`;
+  }
+
+  function renderRenameIdeas() {
+    const rows = window.PKO_RENAME_IDEAS || [];
+    if (!rows.length) return "";
+    return `<div class="source-panel rename-ideas">
+      <p><strong>PKO rename ideas:</strong></p>
+      <div class="rename-chip-list">
+        ${rows.map(r => `<span class="rename-chip"><strong>${esc(r.realName)}</strong> -> <em>${esc(r.pixelName)}</em><small>${esc(r.note)}</small></span>`).join("")}
+      </div>
+    </div>`;
   }
 
   function renderLegends() {
@@ -953,6 +1002,7 @@
         <div class="legend-badges">${(l.badges || []).map(b => `<span>${esc(b)}</span>`).join("")}</div>
         ${l.quote ? `<blockquote>${esc(l.quote)}</blockquote>` : ""}
         <ul class="facts">${(l.facts || []).map(f => `<li>${esc(f)}</li>`).join("")}</ul>
+        ${memeButtonHTML(memeLines(l.name, l.pixelName), "legend-meme")}
         <p class="legend-fun">${esc(l.fun || "")}</p>
       </article>
     `).join("");

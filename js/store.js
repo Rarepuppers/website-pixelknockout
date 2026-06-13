@@ -98,9 +98,84 @@
         const s = ensure(load()); save(s);
         this.user = s.user || null;
       }
+      await this._loadActiveEvent();    // pull the current card from Supabase (no-op in local mode)
       await this.fetchOdds();           // refresh card difficulty (no-op without key)
       if (this.user && this.user.nameChosen) await this._runGrants();
       return this.user;
+    },
+
+    // ---------- active event: built from Supabase so cards roll without a redeploy ----------
+    // The hard-coded window.PKO_EVENT (data.js) is the offline/local fallback. In
+    // Supabase mode we overwrite it IN PLACE from the `current_event` view so every
+    // existing reference (app.js `EVENT`, roster builder) sees the live card.
+    _buildEventFromDb(ev, bouts, bonuses) {
+      const getPersona = window.PKO_getPersona || (real => ({ real, name: real }));
+      const mappedBouts = (bouts || [])
+        .slice()
+        .sort((a, b) => String(a.bout_id).localeCompare(String(b.bout_id)))
+        .map(b => ({
+          id: b.bout_id,
+          cardSection: b.card_section || "main",
+          playable: b.playable !== false,
+          weight: b.weight,
+          aReal: b.side_a,
+          bReal: b.side_b,
+          oddsA: b.odds_a,
+          oddsB: b.odds_b,
+          a: getPersona(b.side_a),
+          b: getPersona(b.side_b),
+          winType: "",
+          result: null,
+        }));
+      const mappedBonuses = (bonuses || []).map(x => ({
+        id: x.bonus_id, label: x.label, description: x.description || x.label,
+        amount: x.amount, startTime: x.starts_at, endTime: x.ends_at,
+      }));
+      return {
+        id: ev.event_id,
+        title: ev.title,
+        shortTitle: ev.short_title,
+        realTitle: ev.real_title || ev.title,
+        date: ev.date_text || "",
+        lockTime: ev.lock_time,
+        endTime: ev.ends_at,
+        season: ev.season,
+        status: ev.status,
+        venue: ev.venue || "",
+        location: ev.location || "",
+        bonusWindows: mappedBonuses,
+        bouts: mappedBouts,
+      };
+    },
+    async _loadActiveEvent() {
+      if (!useSupabase) return;
+      try {
+        const c = await getSb();
+        const { data: ev } = await c.from("current_event").select("*").limit(1).maybeSingle();
+        if (!ev || !ev.event_id) return;   // no event configured yet -> keep fallback card
+        const [{ data: bouts }, { data: bonuses }] = await Promise.all([
+          c.from("event_bouts").select("*").eq("event_id", ev.event_id),
+          c.from("event_bonus_windows").select("*").eq("event_id", ev.event_id),
+        ]);
+        if (!bouts || !bouts.length) return; // misconfigured event -> keep fallback card
+        Object.assign(this.EVENT, this._buildEventFromDb(ev, bouts, bonuses));
+      } catch { /* network/RLS issue -> keep the offline fallback card */ }
+    },
+    async getUpcomingEvents(limit = 6) {
+      if (!useSupabase) return [];
+      try {
+        const c = await getSb();
+        const { data } = await c.from("upcoming_events").select("*")
+          .order("lock_time", { ascending: true }).limit(limit);
+        return (data || []).map(ev => ({
+          event: ev.title,
+          date: ev.date_text || "",
+          venue: ev.venue || "",
+          location: ev.location || "",
+          parsed: ev.lock_time ? new Date(ev.lock_time) : null,
+          status: ev.status,
+        }));
+      } catch { return []; }
     },
 
     async _mapUser(c, u) {

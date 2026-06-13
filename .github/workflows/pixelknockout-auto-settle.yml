@@ -1,0 +1,45 @@
+name: Pixel Knockout auto settle
+
+# Cross-checks finished UFC cards against two public sources and settles each
+# main-card bout ONLY when both sources agree on a clear winner. Ambiguous bouts
+# are left for a human admin. Writes go through the service_role-only
+# `auto_settle_bout` RPC, so the service key never touches the frontend.
+
+on:
+  schedule:
+    # every 30 minutes — fight nights settle fight-by-fight as results land
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Avoid overlapping runs writing the ledger at the same time.
+concurrency:
+  group: pko-auto-settle
+  cancel-in-progress: false
+
+jobs:
+  settle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Settle finished bouts (cross-checked)
+        run: node scripts/settle-results.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          ODDS_SPORT: mma_mixed_martial_arts
+          ODDS_REGION: us
+      - name: Commit settlement log
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add content/auto-settle-log.md
+          git diff --cached --quiet || git commit -m "Auto-settle log update"
+          git push || true

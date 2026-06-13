@@ -1,5 +1,5 @@
 window.PKO_GENERATED_CONTENT = {
-  "updatedAt": "2026-06-09T02:17:51.371Z",
+  "updatedAt": "2026-06-13T09:34:33.165Z",
   "rankingsUpdated": "June 2, 2026",
   "upcomingEvents": [
     {
@@ -7,7 +7,7 @@ window.PKO_GENERATED_CONTENT = {
       "date": "Jun 14, 2026",
       "venue": "White House",
       "location": "Washington, D.C. , U.S.",
-      "parsed": "2026-06-13T14:00:00.000Z",
+      "parsed": "2026-06-14T00:00:00.000Z",
       "sourceUrl": "https://en.wikipedia.org/wiki/List_of_UFC_events"
     },
     {
@@ -15,7 +15,7 @@ window.PKO_GENERATED_CONTENT = {
       "date": "Jun 20, 2026",
       "venue": "Meta Apex",
       "location": "Las Vegas , Nevada , U.S.",
-      "parsed": "2026-06-19T14:00:00.000Z",
+      "parsed": "2026-06-20T00:00:00.000Z",
       "sourceUrl": "https://en.wikipedia.org/wiki/List_of_UFC_events"
     }
   ],

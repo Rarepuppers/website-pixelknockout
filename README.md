@@ -134,17 +134,20 @@ then point `pixelknockout.com` at it.
 | `supabase/schema.sql` | Tables, RLS, server-only point functions |
 
 ## Launch checklist
-- Stripe: verify the live Payment Link copy says optional tip/donation only and no in-game benefit.
+- Stripe: live Payment Link is configured; verify checkout copy says optional tip/donation only and no in-game benefit.
 - Domain: buy the Porkbun domain and point DNS to the deployed host.
+- Email: `info@pixelknockout.com` forwarding is configured.
 - GitHub Pages: set the source to the repository root.
 - Google OAuth: add the production origin and publish the consent screen.
 - Supabase Auth: add the production Site URL and redirect URL.
-- Supabase SQL: re-run `supabase/schema.sql` after schema edits.
+- Supabase SQL: schema has been rerun after the launch/admin edits.
 - Admin settlement: confirm `admin_emails` contains your admin login email before settling real fights.
+- Admin smoke test: on the deployed domain, sign in, choose a profile name, submit picks, verify point history, reset a profile name, adjust points, grant/revoke a manual award, and run one test settlement.
 - Admin content: review `#ops` before each event and keep audit-log reasons clear.
 - Event bonuses: keep `event_bonus_windows` in `supabase/schema.sql` aligned with `PKO_EVENT.bonusWindows` in `js/data.js`.
 - Demo settlement: keep `ENABLE_DEMO_SETTLEMENT` false in production.
-- Difficulty data: add the GitHub Secret `ODDS_API_KEY` for the scheduled cache, or proxy the feed through a Supabase Edge Function.
+- Difficulty data: GitHub Secret `ODDS_API_KEY` is configured for the scheduled cache.
+- Social preview: after DNS is live, paste `https://pixelknockout.com` into a link preview debugger or chat app and confirm the OG image/title/description render.
 - Rankings: refresh `PKO_RANKINGS` from UFC.com before/after major cards; use Wikipedia as backup if the official page blocks.
 - Legends: refresh `PKO_LEGENDS` records/facts from official UFC profiles, UFCStats, Sherdog/Tapology, or Wikipedia before using the archive as a public stats reference.
 - Assets: convert fighter art to transparent 128×128 PNG sprites before wiring `img` paths.
@@ -154,4 +157,4 @@ then point `pixelknockout.com` at it.
 - No "buy points" path anywhere. Points are granted free, equally, every event.
 - No transfer/trade between users. No cash-out.
 - Top-5 belts are cosmetic, zero value, reset with the season (2026, 2027, …).
-- Independent fan-game presentation — no real logos, names-as-branding, or official imagery; disclaimers in footer.
+- Independent fan-game presentation — no real logos, names-as-branding, event posters, official imagery, or implication of UFC/fighter endorsement; disclaimers in footer, About, Terms, and Privacy.

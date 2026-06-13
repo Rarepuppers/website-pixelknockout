@@ -55,11 +55,13 @@ create table if not exists event_bonus_windows (
   bonus_id text primary key,
   event_id text not null,
   label text not null,
+  description text,
   amount int not null check (amount between 1 and 1000),
   starts_at timestamptz not null,
   ends_at timestamptz not null,
   check (ends_at > starts_at)
 );
+alter table public.event_bonus_windows add column if not exists description text;
 
 create table if not exists event_bonus_claims (
   user_id uuid references auth.users on delete cascade,
@@ -78,8 +80,36 @@ create table if not exists events (
   season int not null,
   lock_time timestamptz not null,
   starts_at timestamptz,
-  ends_at timestamptz
+  ends_at timestamptz,
+  -- display + lifecycle fields so the frontend can build the whole card from the
+  -- DB (no redeploy needed to roll to the next event):
+  --   upcoming -> shown as next card / in the schedule
+  --   live     -> forced as the current card (overrides date-based pick)
+  --   settled  -> card is over, results final, still viewable until archived
+  --   archived -> hidden from current/upcoming selection
+  status text not null default 'upcoming'
+    check (status in ('upcoming','live','settled','archived')),
+  real_title text,
+  date_text text,
+  venue text,
+  location text
 );
+
+-- backfill columns for installs created before the display/lifecycle fields existed
+alter table public.events add column if not exists status text not null default 'upcoming';
+alter table public.events add column if not exists real_title text;
+alter table public.events add column if not exists date_text text;
+alter table public.events add column if not exists venue text;
+alter table public.events add column if not exists location text;
+do $$ begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'events_status_check'
+  ) then
+    alter table public.events
+      add constraint events_status_check
+      check (status in ('upcoming','live','settled','archived'));
+  end if;
+end $$;
 
 create table if not exists event_bouts (
   event_id text references events on delete cascade,
@@ -205,6 +235,34 @@ create or replace view event_leaderboard as
     and b.playable = true
     and b.card_section = 'main'
   group by pr.user_id, p.name, pr.event_id;
+
+-- ---------- current / upcoming event selection ----------
+-- The frontend reads the whole active card from here so events can be rolled
+-- forward by editing the `events`/`event_bouts` tables (or the admin tools)
+-- instead of redeploying JavaScript.
+drop view if exists public.current_event;
+drop view if exists public.upcoming_events;
+
+-- One row: the card players should see right now. A `live` event wins; then the
+-- still-open event closest to now; then the most recently completed card (so the
+-- Play view keeps showing final results until the next event is added).
+create or replace view current_event as
+  select *
+  from public.events
+  where status <> 'archived'
+  order by
+    (status = 'live') desc,
+    (lock_time >= now()) desc,
+    abs(extract(epoch from (lock_time - now()))) asc
+  limit 1;
+
+-- Future cards for the Events/schedule page (admin-curated, never fabricated).
+create or replace view upcoming_events as
+  select *
+  from public.events
+  where status in ('upcoming','live')
+    and lock_time >= now()
+  order by lock_time asc;
 
 -- ========== RLS ==========
 alter table profiles      enable row level security;
@@ -796,12 +854,18 @@ begin
   end loop;
 end; $$;
 
-create or replace function public.admin_settle_bout(
+-- Shared settlement core. Writes points, the immutable ledger, the bout_results
+-- row, an audit entry, and trophy awards in one transaction. Callers gate access
+-- (admin email vs. service_role) BEFORE invoking this; the core itself trusts its
+-- caller. `p_source` records who settled ('admin' | 'auto') in the audit log.
+create or replace function public._settle_bout_core(
   p_event text,
   p_bout text,
   p_result text,
-  p_win_type text default null,
-  p_method_detail text default null
+  p_win_type text,
+  p_method_detail text,
+  p_settled_by uuid,
+  p_source text
 )
 returns table(settled_count int, refunded_count int, win_count int, loss_count int)
 language plpgsql security definer
@@ -818,10 +882,8 @@ declare
   wins_total int := 0;
   losses_total int := 0;
   result_row jsonb;
+  open_main int;
 begin
-  if not public._is_admin() then
-    raise exception 'Admin access required';
-  end if;
   if p_result is null or p_result not in ('a','b','void','draw','cancelled') then
     raise exception 'Invalid result';
   end if;
@@ -884,20 +946,42 @@ begin
   values (
     p_event, p_bout, p_result, nullif(trim(coalesce(p_win_type, '')), ''),
     nullif(trim(coalesce(p_method_detail, '')), ''), settled_total,
-    refunded_total, auth.uid(), now()
+    refunded_total, p_settled_by, now()
   );
 
   select to_jsonb(b) into result_row
     from public.bout_results b
    where b.event_id = p_event and b.bout_id = p_bout;
-  perform public._admin_log(
+
+  -- audit directly (service_role callers have no admin JWT, so we can't use
+  -- _admin_log which requires _is_admin()).
+  insert into public.admin_audit_log (
+    admin_user_id, admin_email, target_user_id, action, reason, before_state, after_state
+  )
+  values (
+    p_settled_by,
+    coalesce(nullif(p_source, ''), 'system') || '-settlement',
     null,
     'bout_settlement',
-    'Official/manual result settlement',
+    case when p_source = 'auto' then 'Automated cross-checked result settlement'
+         else 'Official/manual result settlement' end,
     null,
     result_row
   );
+
   perform public._award_event_trophies(p_event);
+
+  -- if every playable main-card bout now has a result, mark the event settled
+  select count(*) into open_main
+    from public.event_bouts b
+    left join public.bout_results r
+      on r.event_id = b.event_id and r.bout_id = b.bout_id
+   where b.event_id = p_event and b.playable = true and b.card_section = 'main'
+     and r.bout_id is null;
+  if open_main = 0 then
+    update public.events set status = 'settled'
+     where event_id = p_event and status <> 'archived';
+  end if;
 
   settled_count := settled_total;
   refunded_count := refunded_total;
@@ -906,19 +990,79 @@ begin
   return next;
 end; $$;
 
+-- Manual settlement from the in-app admin tools (gated by admin email allowlist).
+create or replace function public.admin_settle_bout(
+  p_event text,
+  p_bout text,
+  p_result text,
+  p_win_type text default null,
+  p_method_detail text default null
+)
+returns table(settled_count int, refunded_count int, win_count int, loss_count int)
+language plpgsql security definer
+set search_path = '' as $$
+begin
+  if not public._is_admin() then
+    raise exception 'Admin access required';
+  end if;
+  return query
+    select * from public._settle_bout_core(
+      p_event, p_bout, p_result, p_win_type, p_method_detail, auth.uid(), 'admin'
+    );
+end; $$;
+
+-- Automated settlement entry point for the scheduled cross-check job. Callable
+-- ONLY with the Supabase service_role key (server-side CI), never from the
+-- browser anon/auth roles. The job only invokes this for bouts where two
+-- independent sources AGREE on the outcome (the confidence gate); ambiguous
+-- bouts are left for a human admin.
+create or replace function public.auto_settle_bout(
+  p_event text,
+  p_bout text,
+  p_result text,
+  p_win_type text default null,
+  p_method_detail text default null
+)
+returns table(settled_count int, refunded_count int, win_count int, loss_count int)
+language plpgsql security definer
+set search_path = '' as $$
+begin
+  if coalesce(auth.role(), '') <> 'service_role' then
+    raise exception 'auto_settle_bout requires the service_role key';
+  end if;
+  return query
+    select * from public._settle_bout_core(
+      p_event, p_bout, p_result, p_win_type, p_method_detail, null, 'auto'
+    );
+end; $$;
+
+-- Lock down the automated entry point: only the server-side service_role may call it.
+revoke all on function public.auto_settle_bout(text, text, text, text, text) from public;
+revoke all on function public.auto_settle_bout(text, text, text, text, text) from anon;
+revoke all on function public.auto_settle_bout(text, text, text, text, text) from authenticated;
+grant execute on function public.auto_settle_bout(text, text, text, text, text) to service_role;
+-- The shared core is internal; never expose it to client roles.
+revoke all on function public._settle_bout_core(text, text, text, text, text, uuid, text) from public;
+revoke all on function public._settle_bout_core(text, text, text, text, text, uuid, text) from anon;
+revoke all on function public._settle_bout_core(text, text, text, text, text, uuid, text) from authenticated;
+
 -- Current configured live-event bonuses. Keep this aligned with `js/data.js`.
-insert into public.event_bonus_windows (bonus_id, event_id, label, amount, starts_at, ends_at)
+insert into public.event_bonus_windows (bonus_id, event_id, label, description, amount, starts_at, ends_at)
 values
-  ('ufc-329-live-checkin', 'ufc-329', 'Live event check-in', 329, '2026-07-11T18:00:00-07:00', '2026-07-11T23:00:00-07:00'),
-  ('ufc-329-main-event', 'ufc-329', 'Main event bonus', 200, '2026-07-11T22:35:00-07:00', '2026-07-11T23:00:00-07:00')
+  ('ufc-329-live-checkin', 'ufc-329', 'Live event check-in', 'Visit during the live card and claim this one-time event bonus.', 329, '2026-07-11T18:00:00-07:00', '2026-07-11T23:00:00-07:00'),
+  ('ufc-329-main-event', 'ufc-329', 'Main event bonus', 'Available only during the expected five-round main event window.', 200, '2026-07-11T22:35:00-07:00', '2026-07-11T23:00:00-07:00')
 on conflict (bonus_id) do update set
   event_id = excluded.event_id,
   label = excluded.label,
+  description = excluded.description,
   amount = excluded.amount,
   starts_at = excluded.starts_at,
   ends_at = excluded.ends_at;
 
-insert into public.events (event_id, title, short_title, season, lock_time, starts_at, ends_at)
+insert into public.events (
+  event_id, title, short_title, season, lock_time, starts_at, ends_at,
+  status, real_title, date_text, venue, location
+)
 values (
   'ufc-329',
   'UFC 329 - Knockout King vs The Blessed',
@@ -926,7 +1070,12 @@ values (
   2026,
   '2026-07-11T18:00:00-07:00',
   '2026-07-11T18:00:00-07:00',
-  '2026-07-11T23:00:00-07:00'
+  '2026-07-11T23:00:00-07:00',
+  'upcoming',
+  'Based on UFC 329: McGregor vs. Holloway 2',
+  'Sat Jul 11, 2026 · T-Mobile Arena, Las Vegas',
+  'T-Mobile Arena',
+  'Las Vegas, Nevada, U.S.'
 )
 on conflict (event_id) do update set
   title = excluded.title,
@@ -934,7 +1083,12 @@ on conflict (event_id) do update set
   season = excluded.season,
   lock_time = excluded.lock_time,
   starts_at = excluded.starts_at,
-  ends_at = excluded.ends_at;
+  ends_at = excluded.ends_at,
+  status = excluded.status,
+  real_title = excluded.real_title,
+  date_text = excluded.date_text,
+  venue = excluded.venue,
+  location = excluded.location;
 
 insert into public.event_bouts (
   event_id, bout_id, card_section, playable, weight, side_a, side_b, odds_a, odds_b

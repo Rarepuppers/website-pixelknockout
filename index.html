@@ -22,7 +22,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/pixel.css?v=8" />
+  <link rel="stylesheet" href="css/pixel.css?v=10" />
 </head>
 <body>
   <!-- ============ HEADER ============ -->
@@ -90,7 +90,8 @@
         points with <strong>zero monetary value</strong>. You cannot buy, sell, trade,
         or cash them out. Points are free with every event and reset each year.
         PKO has no paid entry, no purchases, and no cash-out. It is independent
-        and not endorsed by any fighter, promotion, or organization.
+        and not endorsed by UFC, any fighter, promotion, broadcaster, sponsor, or organization.
+        Fight cards, bout order, lock times, and results can change; check official sources before relying on schedule details.
       </p>
     </section>
 
@@ -280,7 +281,7 @@
       <p class="kicker">PARODY FAN GAME</p>
       <h1>About PKO</h1>
       <div class="rules-grid">
-        <div class="rule-block"><h2>Unaffiliated</h2><p>PKO is independent and is not endorsed by any fighter, venue, promotion, commission, broadcaster, sponsor, or organization.</p></div>
+        <div class="rule-block"><h2>Unaffiliated</h2><p>PKO is independent and is not endorsed by UFC, any fighter, venue, promotion, commission, broadcaster, sponsor, or organization.</p></div>
         <div class="rule-block"><h2>Factual references</h2><p>Real fighter and event names are used only to identify scheduled public matchups and results for a fantasy-style prediction game.</p></div>
         <div class="rule-block"><h2>Pixel personas</h2><p>Pixel names, jokes, badges, belts, and shrine items are fictional in-game content created for fun.</p></div>
         <div class="rule-block"><h2>No purchases</h2><p>There is no paid entry, no purchase of points, no cash-out, no transfer market, and no prize of monetary or material value.</p></div>
@@ -290,16 +291,15 @@
 
     <!-- ============ PRIORITIES VIEW ============ -->
     <section id="view-priorities" class="view hidden">
-      <p class="kicker">BUILD ROADMAP</p>
-      <h1>Feature Priorities</h1>
-      <p class="muted">The build order favors launch safety first, then automation, polish, and growth.</p>
+      <p class="kicker">OPERATIONS</p>
+      <h1>Launch Readiness</h1>
+      <p class="muted">The public game is built around free points, admin-audited results, and clear event-data updates.</p>
       <ol class="priority-list">
-        <li><span class="priority-rank">1</span><div><h2>Manual result settlement</h2><p>Use the admin results page to enter official fight outcomes, settle predictions, refund voided bouts, write point history, and refresh event leaderboards after each fight. <a href="#admin" data-route="admin">Open admin results</a>.</p><span class="priority-tag critical">Required before public play</span></div></li>
-        <li><span class="priority-rank">2</span><div><h2>Admin event config</h2><p>Move cards, bouts, lock times, bonus windows, and settlement status out of hard-coded JavaScript into Supabase/admin-managed data.</p><span class="priority-tag critical">Required before frequent updates</span></div></li>
-        <li><span class="priority-rank">3</span><div><h2>Difficulty stat operations</h2><p>Add the external data key or proxy, monitor matched bouts before each event, and keep fallback/default status obvious when external data is unavailable.</p><span class="priority-tag">Launch clarity</span></div></li>
-        <li><span class="priority-rank">4</span><div><h2>Production QA pass</h2><p>Test sign-in, profile creation, prediction locking, point history, event bonuses, leaderboard display, share cards, and mobile layouts against the deployed domain.</p><span class="priority-tag">Release hardening</span></div></li>
-        <li><span class="priority-rank">5</span><div><h2>Launch copy finalization</h2><p>Replace template notes, confirm contact email, verify Terms/Privacy, and keep the free-points rules consistent across the app.</p><span class="priority-tag">Public trust</span></div></li>
-        <li><span class="priority-rank">6</span><div><h2>Sprite and roster polish</h2><p>Wire finished transparent fighter sprites, tighten persona bios, and keep upcoming-card roster seeds current.</p><span class="priority-tag">Visual polish</span></div></li>
+        <li><span class="priority-rank">1</span><div><h2>Admin-audited results</h2><p>Official outcomes are settled through admin tools or the server-only settlement workflow. Corrections, point adjustments, and manual awards leave an audit-log reason.</p><span class="priority-tag">Integrity</span></div></li>
+        <li><span class="priority-rank">2</span><div><h2>Main-card focus</h2><p>Playable picks stay on selected main-card matchups. Undercard rows can appear for schedule context, but they never use Glory Points.</p><span class="priority-tag">Casual friendly</span></div></li>
+        <li><span class="priority-rank">3</span><div><h2>Free-point economy</h2><p>Everyone receives free points from signup, daily visits, and event grants. There is no purchase path, transfer market, cash-out, or prize value.</p><span class="priority-tag">No gambling</span></div></li>
+        <li><span class="priority-rank">4</span><div><h2>Event data updates</h2><p>Schedules, cards, lock times, and results may change. PKO shows source notes and can void, refund, or correct picks when public event data changes.</p><span class="priority-tag">Transparent</span></div></li>
+        <li><span class="priority-rank">5</span><div><h2>Visual polish</h2><p>Pixel sprites, belts, badges, share cards, and empty states are original PKO art assets with no official logos or event poster imagery.</p><span class="priority-tag">Brand system</span></div></li>
       </ol>
     </section>
 
@@ -438,15 +438,16 @@
     <p>PKO — Pixel Knockout · <em>"Welcome to the Player Kill Octagon."</em></p>
     <p class="small muted">Pixel Knockout is a free parody and entertainment site for fun only. It is not a business, betting service, gambling product, store, marketplace, or official sports service.</p>
     <p class="small muted">Glory Points are made-up internet points with zero monetary value. They cannot be bought, sold, traded, transferred, redeemed, or cashed out. Nothing on PKO is for sale.</p>
-    <p class="small muted">Any resemblance to real people, promotions, events, brands, or real-life outcomes is not intended as endorsement, affiliation, sponsorship, representation, or real-world claim.</p>
+    <p class="small muted">PKO is not affiliated with, endorsed by, or sponsored by UFC, any fighter, promotion, venue, commission, broadcaster, sponsor, or organization.</p>
+    <p class="small muted">Any resemblance to real people, promotions, events, brands, or real-life outcomes is not intended as endorsement, affiliation, sponsorship, representation, or real-world claim. Event data may change.</p>
     <p class="small muted">Contact: <a href="mailto:info@pixelknockout.com">info@pixelknockout.com</a></p>
     <p class="small"><a href="terms.html">Terms of Service</a> · <a href="privacy.html">Privacy Policy</a></p>
   </footer>
 
-  <script src="js/config.js?v=8"></script>
-  <script src="js/generated-content.js?v=8"></script>
-  <script src="js/data.js?v=8"></script>
-  <script src="js/store.js?v=8"></script>
-  <script src="js/app.js?v=8"></script>
+  <script src="js/config.js?v=10"></script>
+  <script src="js/generated-content.js?v=10"></script>
+  <script src="js/data.js?v=10"></script>
+  <script src="js/store.js?v=10"></script>
+  <script src="js/app.js?v=10"></script>
 </body>
 </html>

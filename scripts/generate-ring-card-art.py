@@ -115,6 +115,56 @@ def draw_broadcaster(path, hair, jacket, accent, skin, headset=False, bowtie=Fal
 
     im.save(path, "PNG", optimize=True)
 
+def draw_referee(path, hair, accent, skin, build="medium", beard=False):
+    im = Image.new("RGBA", (128, 128), TRANSPARENT)
+    d = ImageDraw.Draw(im)
+    wide = build == "large"
+    slim = build == "slim"
+    body = (38, 52, 90, 91) if wide else (42, 52, 86, 91) if slim else (40, 52, 88, 91)
+
+    # shoes / pants
+    rect(d, (48, 88, 60, 114), (28, 29, 36, 255))
+    rect(d, (68, 88, 80, 114), (28, 29, 36, 255))
+    rect(d, (42, 113, 61, 120), OUTLINE)
+    rect(d, (67, 113, 86, 120), OUTLINE)
+
+    # ref shirt
+    rect(d, body, (16, 18, 24, 255))
+    d.rectangle((body[0] + 4, 56, body[2] - 4, 64), fill=accent)
+    d.rectangle((61, 53, 67, 91), fill=(235, 235, 225, 255))
+    d.rectangle((56, 65, 72, 73), fill=(235, 235, 225, 255))
+    d.rectangle((58, 75, 70, 83), fill=(235, 235, 225, 255))
+    d.rectangle((72, 57, 81, 66), fill=(48, 52, 64, 255), outline=OUTLINE)
+
+    # arms: one raised / one signaling
+    rect(d, (30, 42, 40, 72), skin)
+    rect(d, (88, 61, 98, 78), skin)
+    rect(d, (24, 34, 40, 44), skin)
+    rect(d, (97, 64, 108, 72), skin)
+
+    # head
+    rect(d, (48, 24, 80, 51), skin)
+    rect(d, (58, 45, 70, 55), skin)
+    d.rectangle((56, 38, 60, 42), fill=OUTLINE)
+    d.rectangle((68, 38, 72, 42), fill=OUTLINE)
+    if beard:
+      d.rectangle((55, 44, 73, 51), fill=(48, 32, 28, 255))
+      d.rectangle((60, 46, 68, 48), fill=RED)
+    else:
+      d.rectangle((59, 46, 69, 48), fill=RED)
+
+    # hair
+    d.rectangle((45, 19, 83, 31), fill=hair, outline=OUTLINE)
+    d.rectangle((46, 28, 52, 39), fill=hair)
+    d.rectangle((76, 28, 82, 39), fill=hair)
+    d.rectangle((53, 17, 75, 23), fill=hair)
+
+    # whistle
+    d.rectangle((84, 49, 93, 55), fill=GOLD, outline=OUTLINE)
+    d.line((80, 48, 88, 51), fill=GOLD, width=2)
+
+    im.save(path, "PNG", optimize=True)
+
 draw_presenter(OUT / "arianny-celeste.png", DARK_HAIR, (177, 38, 52, 255), GOLD, SKIN2, "1")
 draw_presenter(OUT / "brittney-palmer.png", BROWN_HAIR, (54, 62, 145, 255), BLUE, SKIN, "2")
 draw_presenter(OUT / "luciana-andrade.png", DARK_HAIR, (77, 132, 85, 255), GOLD, SKIN, "3")
@@ -129,5 +179,11 @@ draw_broadcaster(OUT / "dana-white.png", (220, 220, 220, 255), (24, 25, 34, 255)
 draw_broadcaster(OUT / "scott-coker.png", GREY_HAIR, (35, 44, 74, 255), BLUE, SKIN, mic=True)
 draw_broadcaster(OUT / "nina-drama.png", DARK_HAIR, (92, 42, 128, 255), GOLD, SKIN2, headset=True)
 draw_broadcaster(OUT / "ariel-helwani.png", DARK_HAIR, (42, 55, 70, 255), BLUE, SKIN, headset=True, mic=True)
+
+draw_referee(OUT / "herb-dean.png", DARK_HAIR, GOLD, SKIN, build="medium", beard=True)
+draw_referee(OUT / "marc-goddard.png", BROWN_HAIR, BLUE, SKIN2, build="large", beard=True)
+draw_referee(OUT / "jason-herzog.png", (70, 48, 40, 255), RED, SKIN2, build="slim")
+draw_referee(OUT / "dan-miragliotta.png", GREY_HAIR, GOLD, SKIN2, build="large")
+draw_referee(OUT / "john-mccarthy.png", GREY_HAIR, BLUE, SKIN, build="large", beard=True)
 
 print("Generated ring-card character art in", OUT)
