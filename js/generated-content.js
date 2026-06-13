@@ -1,9 +1,5 @@
 window.PKO_GENERATED_CONTENT = {
-<<<<<<< HEAD
-  "updatedAt": "2026-06-13T09:34:33.165Z",
-=======
-  "updatedAt": "2026-06-13T09:33:10.042Z",
->>>>>>> aa78a168df1142f6017b19f6f7991a954b417823
+  "updatedAt": "2026-06-13T14:23:34.647Z",
   "rankingsUpdated": "June 2, 2026",
   "upcomingEvents": [
     {
@@ -25,7 +21,7 @@ window.PKO_GENERATED_CONTENT = {
   ],
   "oddsSnapshot": {
     "eventId": "ufc-329",
-    "fetchedAt": 1781343190776,
+    "fetchedAt": 1781360615118,
     "bouts": {
       "b1": {
         "oddsA": 245,
