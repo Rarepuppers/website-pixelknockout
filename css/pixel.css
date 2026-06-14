@@ -12,6 +12,10 @@
   --green: #4dffa3;
   --border: #4b3f8f;
   --shadow: #07061a;
+  --sprite-source-size: 128px;
+  --fighter-card-avatar: 80px;
+  --fighter-profile-avatar: 96px;
+  --roster-sprite-size: 64px;
 }
 
 * { box-sizing: border-box; }
@@ -146,7 +150,7 @@ a { color: var(--blue); text-decoration: none; }
 .fighter.win { border-color: var(--green); }
 .fighter.lose { opacity: .5; }
 .avatar {
-  width: 56px; height: 56px; margin: 0 auto 8px; border-radius: 6px;
+  width: var(--fighter-card-avatar); height: var(--fighter-card-avatar); margin: 0 auto 8px; border-radius: 6px;
   display: flex; align-items: center; justify-content: center; font-size: 30px;
   image-rendering: pixelated; border: 2px solid var(--shadow); overflow: hidden;
 }
@@ -488,14 +492,14 @@ a { color: var(--blue); text-decoration: none; }
 }
 .pixel-name { font-family: 'Press Start 2P'; font-size: 9px; color: var(--gold); }
 .roster-sprite {
-  width: 56px; height: 56px; display: grid; place-items: center;
+  width: calc(var(--roster-sprite-size) + 4px); height: calc(var(--roster-sprite-size) + 4px); display: grid; place-items: center;
   background: #120d18; border: 2px solid var(--border); border-radius: 6px;
   box-shadow: inset 0 -3px 0 rgba(0,0,0,.22);
 }
 .roster-sprite img {
-  width: 52px; height: 52px; object-fit: contain; image-rendering: pixelated;
+  width: var(--roster-sprite-size); height: var(--roster-sprite-size); object-fit: contain; image-rendering: pixelated;
 }
-.corner-crew .roster-sprite img { width: 56px; height: 56px; }
+.corner-crew .roster-sprite img { width: var(--roster-sprite-size); height: var(--roster-sprite-size); }
 .roster-rank { display: flex; align-items: center; gap: 8px; color: var(--muted); }
 .source-panel {
   background: var(--bg2); border: 3px solid var(--border); border-radius: 10px;
@@ -535,7 +539,7 @@ a { color: var(--blue); text-decoration: none; }
 .legend-fun { color: var(--gold); margin-bottom: 0; }
 
 /* ===== Profile / trophy shelf ===== */
-.avatar.big { width: 72px; height: 72px; font-size: 38px; }
+.avatar.big { width: var(--fighter-profile-avatar); height: var(--fighter-profile-avatar); font-size: 38px; }
 .showcase-big {
   width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;
   background: var(--bg2); border: 3px solid var(--gold); border-radius: 8px;
@@ -706,8 +710,8 @@ textarea.input { resize: vertical; font-family: 'VT323'; }
   .season-panel { grid-template-columns: 1fr; }
   .roster-row { grid-template-columns: 1fr; gap: 4px; }
   .roster-head { display: none; }
-  .roster-sprite { width: 64px; height: 64px; }
-  .roster-sprite img { width: 60px; height: 60px; }
+  .roster-sprite { width: calc(var(--roster-sprite-size) + 4px); height: calc(var(--roster-sprite-size) + 4px); }
+  .roster-sprite img { width: var(--roster-sprite-size); height: var(--roster-sprite-size); }
   .crew-sprite-stack { width: 100%; align-items: flex-start; }
   .crew-meme { position: static; width: 100%; margin: 8px 0 0; }
   .history-row { grid-template-columns: 1fr auto; }

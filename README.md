@@ -150,7 +150,7 @@ then point `pixelknockout.com` at it.
 - Social preview: after DNS is live, paste `https://pixelknockout.com` into a link preview debugger or chat app and confirm the OG image/title/description render.
 - Rankings: refresh `PKO_RANKINGS` from UFC.com before/after major cards; use Wikipedia as backup if the official page blocks.
 - Legends: refresh `PKO_LEGENDS` records/facts from official UFC profiles, UFCStats, Sherdog/Tapology, or Wikipedia before using the archive as a public stats reference.
-- Assets: convert fighter art to transparent 128×128 PNG sprites before wiring `img` paths.
+- Assets: convert fighter art to transparent 128x128 PNG sprites before wiring `img` paths. Render them at 80x80 on matchup cards, 96x96 in profile/detail views, and 64x64 in roster rows.
 - Flags: keep country flags in both `assets/flags/64x64/` and `assets/flags/64x48/`; display smaller with `image-rendering: pixelated`.
 
 ## Guardrails baked in

@@ -32,13 +32,17 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const ODDS_KEY = process.env.ODDS_API_KEY || "";
 const ODDS_SPORT = process.env.ODDS_SPORT || "mma_mixed_martial_arts";
 
-if (!SUPABASE_URL || !SERVICE_KEY) {
-  console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY — aborting.");
-  process.exit(1);
-}
-
 const log = [];
 const note = msg => { console.log(msg); log.push(msg); };
+
+if (!SUPABASE_URL || !SERVICE_KEY) {
+  note(`# PKO auto-settle run @ ${new Date().toISOString()}`);
+  note("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY - skipping auto-settle.");
+  note("Configure GitHub Actions secrets SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY before enabling scheduled settlement.");
+  await fs.mkdir(path.dirname(logFile), { recursive: true });
+  await fs.writeFile(logFile, log.join("\n") + "\n", "utf8");
+  process.exit(0);
+}
 
 // ---------- Supabase REST (service role) ----------
 async function sbGet(query) {

@@ -6,9 +6,11 @@ name: Pixel Knockout auto settle
 # `auto_settle_bout` RPC, so the service key never touches the frontend.
 
 on:
-  schedule:
-    # every 30 minutes — fight nights settle fight-by-fight as results land
-    - cron: "*/30 * * * *"
+  # Re-enable this schedule when Pixel Knockout is live and the Supabase
+  # service-role secrets are configured in GitHub Actions.
+  # schedule:
+  #   # every 30 minutes - fight nights settle fight-by-fight as results land
+  #   - cron: "*/30 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -27,7 +29,28 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+      - name: Check settlement configuration
+        id: config
+        run: |
+          ready=true
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "::warning::SUPABASE_URL is not configured; skipping auto-settle."
+            ready=false
+          fi
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::warning::SUPABASE_SERVICE_ROLE_KEY is not configured; skipping auto-settle."
+            ready=false
+          fi
+          if [ -z "$ODDS_API_KEY" ]; then
+            echo "::warning::ODDS_API_KEY is not configured; the cross-check cannot settle bouts."
+          fi
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
       - name: Settle finished bouts (cross-checked)
+        if: steps.config.outputs.ready == 'true'
         run: node scripts/settle-results.mjs
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -38,6 +61,10 @@ jobs:
       - name: Commit settlement log
         if: always()
         run: |
+          if [ ! -f content/auto-settle-log.md ]; then
+            echo "No settlement log generated; nothing to commit."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add content/auto-settle-log.md

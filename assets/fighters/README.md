@@ -16,10 +16,18 @@ stand-ins for authored personas and can be replaced with finished 128x128 PNGs
 as each sprite is ready.
 
 ## Specs
-- **Size:** 96×96 or 128×128 px (square).
+- **Canonical source size:** 128x128 px square PNG.
+- **Card display size:** 80x80 px for normal matchup cards.
+- **Profile display size:** 96x96 px for profile/detail views.
+- **Roster display size:** 64x64 px for compact roster rows.
 - **Format:** PNG with a **transparent** background.
 - **Style:** original pixel art "in the style of" retro 16-bit wrestling sprites.
 - **Palette:** keep it consistent across fighters for a unified look.
+
+Keep the shipped source at 128x128 even when the UI renders it smaller. Do not
+save final fighter sprites as 60x60, 80x80, or 96x96 files; that permanently
+throws away detail. The cleanest balance is **128 source, 80 card display, 96
+profile display**.
 
 ## Legal guardrails (important)
 - **Do NOT copy** actual Super Fire Pro Wrestling / Fire Pro sprites or any other
