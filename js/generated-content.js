@@ -1,9 +1,5 @@
 window.PKO_GENERATED_CONTENT = {
-<<<<<<< HEAD
-  "updatedAt": "2026-06-13T19:54:32.460Z",
-=======
-  "updatedAt": "2026-06-13T19:53:03.075Z",
->>>>>>> eb1a5540b473274e724d13840d08f3fde8e8dc03
+  "updatedAt": "2026-06-14T05:04:49.876Z",
   "rankingsUpdated": "June 2, 2026",
   "upcomingEvents": [
     {
@@ -23,15 +19,9 @@ window.PKO_GENERATED_CONTENT = {
       "sourceUrl": "https://en.wikipedia.org/wiki/List_of_UFC_events"
     }
   ],
-<<<<<<< HEAD
-  "oddsSnapshot": null,
-  "warnings": [
-    "ODDS_API_KEY is not configured; leaving odds snapshot empty."
-  ],
-=======
   "oddsSnapshot": {
     "eventId": "ufc-329",
-    "fetchedAt": 1781380383520,
+    "fetchedAt": 1781413490518,
     "bouts": {
       "b1": {
         "oddsA": 245,
@@ -53,7 +43,6 @@ window.PKO_GENERATED_CONTENT = {
     "bookmakers": 3
   },
   "warnings": [],
->>>>>>> eb1a5540b473274e724d13840d08f3fde8e8dc03
   "sources": {
     "upcomingEvents": "https://en.wikipedia.org/wiki/List_of_UFC_events",
     "odds": "https://the-odds-api.com/"
