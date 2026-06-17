@@ -1,5 +1,5 @@
 window.PKO_GENERATED_CONTENT = {
-  "updatedAt": "2026-06-16T21:18:35.337Z",
+  "updatedAt": "2026-06-17T05:14:35.089Z",
   "rankingsUpdated": "June 2, 2026",
   "upcomingEvents": [
     {
@@ -21,11 +21,11 @@ window.PKO_GENERATED_CONTENT = {
   ],
   "oddsSnapshot": {
     "eventId": "ufc-329",
-    "fetchedAt": 1781644715925,
+    "fetchedAt": 1781673275595,
     "bouts": {
       "b1": {
-        "oddsA": 233,
-        "oddsB": -292,
+        "oddsA": 228,
+        "oddsB": -287,
         "sourceTitle": "Conor McGregor vs Max Holloway"
       },
       "b2": {
