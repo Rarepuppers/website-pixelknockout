@@ -1,6 +1,6 @@
 # Pixel Knockout Content Refresh
 
-Last generated: 2026-06-17T20:29:37.550Z
+Last generated: 2026-06-18T05:00:32.063Z
 Upcoming events cached: 2
 Odds snapshot matched bouts: 3
 
